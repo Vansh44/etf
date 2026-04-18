@@ -1,0 +1,150 @@
+2026-04-18 05:23:09,245  INFO      Strategy scheduler started. Will run daily at 15:20 IST.
+2026-04-18 05:23:09,245  INFO      Watchlist: INFRABEES, DEFENCEETF, MID150BEES, MANFBEES, CONSUMBEES, N100
+2026-04-18 05:23:09,246  INFO      ============================================================
+2026-04-18 05:23:09,246  INFO        ETF Strategy Run  |  2026-04-18 05:23:09
+2026-04-18 05:23:09,246  INFO      ============================================================
+2026-04-18 05:23:09,246  INFO      Running balance before trade: ₹10,000.00
+2026-04-18 05:23:09,246  ERROR     Authentication failed: Non-base32 digit found
+2026-04-18 05:31:27,193  INFO      ============================================================
+2026-04-18 05:31:27,193  INFO        ETF Strategy Run  |  2026-04-18 05:31:27
+2026-04-18 05:31:27,193  INFO      ============================================================
+2026-04-18 05:31:27,193  INFO      Running balance before trade: ₹10,000.00
+2026-04-18 05:31:27,193  ERROR     Authentication failed: Non-base32 digit found
+2026-04-18 05:33:14,546  INFO      ============================================================
+2026-04-18 05:33:14,546  INFO        ETF Strategy Run  |  2026-04-18 05:33:14
+2026-04-18 05:33:14,546  INFO      ============================================================
+2026-04-18 05:33:14,546  INFO      Running balance before trade: ₹10,000.00
+2026-04-18 05:33:14,546  ERROR     Authentication failed: Non-base32 digit found
+2026-04-18 05:34:28,228  INFO      ============================================================
+2026-04-18 05:34:28,228  INFO        ETF Strategy Run  |  2026-04-18 05:34:28
+2026-04-18 05:34:28,228  INFO      ============================================================
+2026-04-18 05:34:28,228  INFO      Running balance before trade: ₹10,000.00
+2026-04-18 05:34:28,228  ERROR     Authentication failed: Non-base32 digit found
+2026-04-18 05:37:17,110  INFO      ============================================================
+2026-04-18 05:37:17,110  INFO        ETF Strategy Run  |  2026-04-18 05:37:17
+2026-04-18 05:37:17,110  INFO      ============================================================
+2026-04-18 05:37:17,110  INFO      Running balance before trade: ₹10,000.00
+2026-04-18 05:37:17,293  ERROR     Authentication failed: Authentication failed. Your API token has either expired or is invalid.
+2026-04-18 05:37:39,826  INFO      ============================================================
+2026-04-18 05:37:39,826  INFO        ETF Strategy Run  |  2026-04-18 05:37:39
+2026-04-18 05:37:39,826  INFO      ============================================================
+2026-04-18 05:37:39,826  INFO      Running balance before trade: ₹10,000.00
+2026-04-18 05:37:40,119  ERROR     Authentication failed: Authentication failed. Your API token has either expired or is invalid.
+2026-04-18 05:39:37,110  INFO      ============================================================
+2026-04-18 05:39:37,110  INFO        ETF Strategy Run  |  2026-04-18 05:39:37
+2026-04-18 05:39:37,110  INFO      ============================================================
+2026-04-18 05:39:37,110  INFO      Running balance before trade: ₹10,000.00
+2026-04-18 05:39:38,678  INFO      Groww API authenticated successfully.
+2026-04-18 05:39:38,849  INFO      
+📊 Fetching prices for all ETFs...
+
+2026-04-18 05:39:39,297  INFO        INFRABEES       Current: ₹  961.05  |  5d ago: ₹  939.84  |  Return:   +2.26%
+2026-04-18 05:39:39,445  WARNING   [DEFENCEETF] LTP not found in response: {}
+2026-04-18 05:39:39,722  ERROR     [DEFENCEETF] Failed to fetch historical data: Please provide correct value of trading symbol
+2026-04-18 05:39:39,723  WARNING     ⚠  [DEFENCEETF] Skipping — price data unavailable.
+2026-04-18 05:39:40,119  INFO        MID150BEES      Current: ₹  227.57  |  5d ago: ₹  219.79  |  Return:   +3.54%
+2026-04-18 05:39:40,275  WARNING   [MANFBEES] LTP not found in response: {}
+2026-04-18 05:39:40,444  ERROR     [MANFBEES] Failed to fetch historical data: Please provide correct value of trading symbol
+2026-04-18 05:39:40,445  WARNING     ⚠  [MANFBEES] Skipping — price data unavailable.
+2026-04-18 05:39:42,925  INFO        CONSUMBEES      Current: ₹  126.90  |  5d ago: ₹  124.44  |  Return:   +1.98%
+2026-04-18 05:39:43,405  WARNING   [N100] Not enough candle data (0 candles).
+2026-04-18 05:39:43,405  WARNING     ⚠  [N100] Skipping — price data unavailable.
+2026-04-18 05:39:43,405  INFO      
+────────────────────────────────────────────────────────────
+2026-04-18 05:39:43,405  INFO        ✅  Selected ETF : Nippon India ETF Consumption (CONSUMBEES)
+2026-04-18 05:39:43,405  INFO            5-day return : +1.98%  (lowest in watchlist)
+2026-04-18 05:39:43,405  INFO            Price        : ₹126.90
+2026-04-18 05:39:43,406  INFO            Units to buy : 3
+2026-04-18 05:39:43,406  INFO            Total cost   : ₹380.70
+2026-04-18 05:39:43,406  INFO      ────────────────────────────────────────────────────────────
+2026-04-18 05:39:43,610  ERROR       🔴 Order placement FAILED: No registered IPs found for this user. Please register your IPs first.
+2026-04-18 05:39:43,611  INFO      
+============================================================
+
+2026-04-18 06:11:26,101  INFO      ============================================================
+2026-04-18 06:11:26,101  INFO        ETF Strategy Run  |  2026-04-18 06:11:26
+2026-04-18 06:11:26,101  INFO      ============================================================
+2026-04-18 06:11:26,101  INFO      Running balance before trade: ₹10,000.00
+2026-04-18 06:11:26,942  INFO      Groww API authenticated successfully.
+2026-04-18 06:11:27,118  INFO      
+📊 Fetching prices for all ETFs...
+
+2026-04-18 06:11:27,589  INFO        INFRAIETF       Current: ₹   95.42  |  5d ago: ₹   93.75  |  Return:   +1.78%
+2026-04-18 06:11:28,014  INFO        MODEFENCE       Current: ₹   96.71  |  5d ago: ₹   91.01  |  Return:   +6.26%
+2026-04-18 06:11:28,329  INFO        MID150BEES      Current: ₹  227.57  |  5d ago: ₹  219.79  |  Return:   +3.54%
+2026-04-18 06:11:28,789  INFO        MAKEINDIA       Current: ₹  158.02  |  5d ago: ₹  154.39  |  Return:   +2.35%
+2026-04-18 06:11:29,161  INFO        CONSUMBEES      Current: ₹  126.90  |  5d ago: ₹  124.44  |  Return:   +1.98%
+2026-04-18 06:11:29,757  INFO        MON100          Current: ₹  286.78  |  5d ago: ₹  256.38  |  Return:  +11.86%
+2026-04-18 06:11:29,757  INFO      
+────────────────────────────────────────────────────────────
+2026-04-18 06:11:29,757  INFO        ✅  Selected ETF : ICICI Prudential Nifty Infrastructure ETF (INFRAIETF)
+2026-04-18 06:11:29,757  INFO            5-day return : +1.78%  (lowest in watchlist)
+2026-04-18 06:11:29,758  INFO            Price        : ₹95.42
+2026-04-18 06:11:29,758  INFO            Units to buy : 5
+2026-04-18 06:11:29,758  INFO            Total cost   : ₹477.10
+2026-04-18 06:11:29,758  INFO      ────────────────────────────────────────────────────────────
+2026-04-18 06:11:29,916  ERROR       🔴 Order placement FAILED: Request from unregistered IP address.
+2026-04-18 06:11:29,916  INFO      
+============================================================
+
+2026-04-18 06:21:12,853  INFO      Strategy scheduler started. Will run daily at 15:20 IST.
+2026-04-18 06:21:12,853  INFO      Watchlist: INFRAIETF, MODEFENCE, MID150BEES, MAKEINDIA, CONSUMBEES, MON100
+2026-04-18 06:21:12,853  INFO      ============================================================
+2026-04-18 06:21:12,853  INFO        ETF Strategy Run  |  2026-04-18 06:21:12
+2026-04-18 06:21:12,853  INFO      ============================================================
+2026-04-18 06:21:12,853  INFO      Running balance before trade: ₹10,000.00
+2026-04-18 06:21:12,853  ERROR     Authentication failed: Non-base32 digit found
+2026-04-18 06:21:52,094  INFO      Strategy scheduler started. Will run daily at 15:20 IST.
+2026-04-18 06:21:52,094  INFO      Watchlist: INFRAIETF, MODEFENCE, MID150BEES, MAKEINDIA, CONSUMBEES, MON100
+2026-04-18 06:21:52,094  INFO      ============================================================
+2026-04-18 06:21:52,094  INFO        ETF Strategy Run  |  2026-04-18 06:21:52
+2026-04-18 06:21:52,094  INFO      ============================================================
+2026-04-18 06:21:52,094  INFO      Running balance before trade: ₹10,000.00
+2026-04-18 06:21:52,333  INFO      Groww API authenticated successfully.
+2026-04-18 06:21:52,464  INFO      
+📊 Fetching prices for all ETFs...
+
+2026-04-18 06:21:52,852  INFO        INFRAIETF       Current: ₹   95.42  |  5d ago: ₹   93.75  |  Return:   +1.78%
+2026-04-18 06:21:53,149  INFO        MODEFENCE       Current: ₹   96.71  |  5d ago: ₹   91.01  |  Return:   +6.26%
+2026-04-18 06:21:53,718  INFO        MID150BEES      Current: ₹  227.57  |  5d ago: ₹  219.79  |  Return:   +3.54%
+2026-04-18 06:21:54,235  INFO        MAKEINDIA       Current: ₹  158.02  |  5d ago: ₹  154.39  |  Return:   +2.35%
+2026-04-18 06:21:54,594  INFO        CONSUMBEES      Current: ₹  126.90  |  5d ago: ₹  124.44  |  Return:   +1.98%
+2026-04-18 06:21:54,955  INFO        MON100          Current: ₹  286.78  |  5d ago: ₹  256.38  |  Return:  +11.86%
+2026-04-18 06:21:54,955  INFO      
+────────────────────────────────────────────────────────────
+2026-04-18 06:21:54,955  INFO        ✅  Selected ETF:  ICICI Prudential Nifty Infrastructure ETF (INFRAIETF)
+2026-04-18 06:21:54,955  INFO            5-day return:  +1.78%  (lowest in watchlist)
+2026-04-18 06:21:54,955  INFO            Price:         ₹95.42
+2026-04-18 06:21:54,955  INFO            Units to buy:  5
+2026-04-18 06:21:54,956  INFO            Total cost:    ₹477.10
+2026-04-18 06:21:54,956  INFO      ────────────────────────────────────────────────────────────
+2026-04-18 06:21:55,106  ERROR       🔴 Order placement FAILED: Request from unregistered IP address.
+2026-04-18 06:21:55,107  INFO      
+============================================================
+
+2026-04-18 07:25:50,285  INFO      ============================================================
+2026-04-18 07:25:50,285  INFO        ETF Strategy Run  |  2026-04-18 07:25:50
+2026-04-18 07:25:50,285  INFO      ============================================================
+2026-04-18 07:25:50,285  INFO      Running balance before trade: ₹10,000.00
+2026-04-18 07:25:50,598  INFO      Groww API authenticated successfully.
+2026-04-18 07:25:50,841  INFO      
+📊 Fetching prices for all ETFs...
+
+2026-04-18 07:25:51,465  INFO        INFRAIETF       Current: ₹   95.42  |  5d ago: ₹   93.75  |  Return:   +1.78%
+2026-04-18 07:25:51,990  INFO        MODEFENCE       Current: ₹   96.71  |  5d ago: ₹   91.01  |  Return:   +6.26%
+2026-04-18 07:25:52,512  INFO        MID150BEES      Current: ₹  227.57  |  5d ago: ₹  219.79  |  Return:   +3.54%
+2026-04-18 07:25:53,032  INFO        MAKEINDIA       Current: ₹  158.02  |  5d ago: ₹  154.39  |  Return:   +2.35%
+2026-04-18 07:25:53,614  INFO        CONSUMBEES      Current: ₹  126.90  |  5d ago: ₹  124.44  |  Return:   +1.98%
+2026-04-18 07:25:54,097  INFO        MON100          Current: ₹  286.78  |  5d ago: ₹  256.38  |  Return:  +11.86%
+2026-04-18 07:25:54,097  INFO      
+────────────────────────────────────────────────────────────
+2026-04-18 07:25:54,097  INFO        ✅  Selected ETF : ICICI Prudential Nifty Infrastructure ETF (INFRAIETF)
+2026-04-18 07:25:54,097  INFO            5-day return : +1.78%  (lowest in watchlist)
+2026-04-18 07:25:54,097  INFO            Price        : ₹95.42
+2026-04-18 07:25:54,097  INFO            Units to buy : 5
+2026-04-18 07:25:54,097  INFO            Total cost   : ₹477.10
+2026-04-18 07:25:54,097  INFO      ────────────────────────────────────────────────────────────
+2026-04-18 07:25:54,298  ERROR       🔴 Order placement FAILED: Request from unregistered IP address.
+2026-04-18 07:25:54,298  INFO      
+============================================================
+
