@@ -5,4 +5,5 @@ ETF_WATCHLIST = {
     "MAKEINDIA":  "Mirae Asset Nifty India Manufacturing ETF",
     "BFSI":   "Mirae Asset Nifty Financial Services ETF",
     "MON100":   "Motilal Oswal NASDAQ 100 ETF",
+    "INFRAIETF":  "ICICI Prudential Nifty Infrastructure ETF",
 }
