@@ -3,7 +3,7 @@ readme_content = """# 📈 Groww Cloud Quant: ETF Pullback Strategy
 A fully automated, stateless quantitative trading algorithm built for **Groww Cloud**. This bot scans a curated watchlist of Indian ETFs, identifies the optimal daily target using a volatility-adjusted pullback strategy, and autonomously executes a limit order right before market close.
 
 ## 🧠 The Algorithm (Hybrid Strategy)
-This bot operates on a **Multi-Tiered Selection System** to balance capital preservation with aggressive opportunity hunting. It runs daily at 3:15 PM IST.
+This bot operates on a **Multi-Tiered Selection System** to balance capital preservation with aggressive opportunity hunting. It runs daily at 3:00 PM IST.
 
 ### Tier 1: The Trend Filter (Alpha Seeking)
 The algorithm calculates the 50-Day and 100-Day Simple Moving Averages (SMA) using pure Pandas math. It filters the watchlist to only include ETFs that are in a mathematically confirmed structural uptrend:
