@@ -1,58 +1,26 @@
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import json
 import logging
 import datetime
 import pyotp
 import pandas as pd
 from growwapi import GrowwAPI
 import os
+from holidays import NSE_MARKET_HOLIDAYS
+from watchlist import ETF_WATCHLIST
 
-
-# ─────────────────────────────────────────────
-#  LOCAL DATA CONSOLIDATION (Replaces separate files)
-# ─────────────────────────────────────────────
-ETF_WATCHLIST = {
-    "MOMIDMTM":  "Motilal Oswal Nifty Midcap 150 Momentum 50 ETF",
-    "ALPHA":      "Kotak Nifty Alpha 50 ETF",
-    "MODEFENCE":   "Motilal Oswal Nifty India Defence ETF",
-    "MAKEINDIA":  "Mirae Asset Nifty India Manufacturing ETF",
-    "BFSI":   "Mirae Asset Nifty Financial Services ETF",
-    "MON100":   "Motilal Oswal NASDAQ 100 ETF",
-}
-
-NSE_MARKET_HOLIDAYS = {
-    "2026-01-15", # Maharashtra Municipal Elections
-    "2026-01-26", # Republic Day
-    "2026-03-03", # Holi
-    "2026-03-26", # Shri Ram Navami
-    "2026-03-31", # Shri Mahavir Jayanti
-    "2026-04-03", # Good Friday
-    "2026-04-14", # Dr. Baba Saheb Ambedkar Jayanti
-    "2026-05-01", # Maharashtra Day
-    "2026-05-28", # Bakri Id
-    "2026-06-26", # Muharram
-    "2026-09-14", # Ganesh Chaturthi
-    "2026-10-02", # Mahatma Gandhi Jayanti
-    "2026-10-20", # Dussehra
-    "2026-11-10", # Diwali-Balipratipada
-    "2026-11-24", # Prakash Gurpurb Sri Guru Nanak Dev
-    "2026-12-25", # Christmas
-}
 
 
 # ─────────────────────────────────────────────
 #  CONFIGURATION
 # ─────────────────────────────────────────────
-TOTP_TOKEN  = "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NjQ5MTI4NjYsImlhdCI6MTc3NjUxMjg2NiwibmJmIjoxNzc2NTEyODY2LCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCI0Y2E1YTRmMS04ZjQ2LTRlZWUtOTI1MC1kMjA3Mjk1OGNjOGRcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiMTg4ZGUxZjUtMGU4NC00ODEyLTg4MDktMjVhYTIzZDFhNzZiXCIsXCJkZXZpY2VJZFwiOlwiZjBhMWIwYTEtOGRmNC01MTVjLWJmNDEtYTBjNTNiNmRhNzcwXCIsXCJzZXNzaW9uSWRcIjpcImE4MzI1MWUxLWY4YTAtNDFjMC1hY2RlLTk2Mjc1ZTJhNzc0MlwiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYklTcjNpS092M2krNm1JMUs1ekxteUpSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwOTA6ZDA0Nzo1YTAyOmVkNTU6NGI1Njo2M2QyOmNhNTgsMTYyLjE1OC4yMjcuMTY2LDM1LjI0MS4yMy4xMjNcIixcInR3b0ZhRXhwaXJ5VHNcIjoyNTY0OTEyODY2ODU5LFwidmVuZG9yTmFtZVwiOlwiZ3Jvd3dBcGlcIn0iLCJpc3MiOiJhcGV4LWF1dGgtcHJvZC1hcHAifQ.t1yjZJCdrxrX27Qr15TXNqQprjA4DmcJyDEQuxZphjE_-xj5nyuAjP3WI5sRrB8CgZ9kEvLCeNpWS9nJiSb-ag"
-TOTP_SECRET = "JNGRHSUI6FGAT3IMVKYR34F6JOAUO6TV"
-EMAIL_SENDER   = "iamvanshgupta608@gmail.com"      
-EMAIL_PASSWORD = "wtwzvwxncwlmfpiv"    
-EMAIL_RECEIVER = "iamvanshgupta01@gmail.com"
-
+TOTP_TOKEN  = os.getenv("GROWW_TOTP_TOKEN")
+TOTP_SECRET = os.getenv("GROWW_TOTP_SECRET")
+EMAIL_SENDER   = os.getenv("EMAIL_SENDER")      
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")    
+EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
 DAILY_ALLOCATION = 500.0  # Target spend per run
-LEDGER_FILE = "ledger.json"
 
 # ─────────────────────────────────────────────
 #  LOGGING
@@ -170,16 +138,14 @@ def send_trade_email(name: str, symbol: str, units: int, price: float, total_cos
 # ─────────────────────────────────────────────
 def run_strategy() -> None:
     log.info("=" * 60)
-    log.info(f"  Quant Strategy Run  |  {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    log.info(f"  Quant Strategy Run (HYBRID)  |  {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     log.info("=" * 60)
 
-    # --- HOLIDAY GATEKEEPER ---
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    if today_str in NSE_MARKET_HOLIDAYS:
-        log.info(f"  🛑 MARKET CLOSED: Today ({today_str}) is a listed NSE holiday.")
-        log.info("  Skipping script execution.")
-        return  
-    # --------------------------
+    # --- HOLIDAY & WEEKEND GATEKEEPER ---
+    today = datetime.date.today()
+    if today.weekday() >= 5 or today.strftime("%Y-%m-%d") in NSE_MARKET_HOLIDAYS:
+        log.info("  🛑 MARKET CLOSED. Skipping execution.")
+        return
 
     try:
         groww = get_groww_client()
@@ -187,10 +153,10 @@ def run_strategy() -> None:
         log.error(f"Authentication failed: {e}")
         return
 
-    # 1. Stateless Daily Budget
     log.info(f"  💰 Daily Target Allocation: ₹{DAILY_ALLOCATION:.2f}")
 
     valid_targets = []
+    all_targets = []
     
     for symbol, name in ETF_WATCHLIST.items():
         df = get_historical_dataframe(groww, symbol)
@@ -201,32 +167,42 @@ def run_strategy() -> None:
         latest = df.iloc[-1]
         current_price = latest['close']
         dma_50 = latest['50_DMA']
-        dma_100 = latest['100_DMA'] # Using your updated 100-DMA logic
+        dma_100 = latest['100_DMA'] 
         rsi_3 = latest['RSI_3']
 
         log.info(f"  📊 {symbol:<12} | P: ₹{current_price:>7.2f} | 50DMA: {dma_50:>7.2f} | 100DMA: {dma_100:>7.2f} | RSI: {rsi_3:>5.2f}")
 
-        # Trend Filter Condition
-        if current_price > dma_50 and dma_50 > dma_100:
-            valid_targets.append({
-                "symbol": symbol,
-                "name": name,
-                "price": current_price,
-                "rsi": rsi_3
-            })
+        # Store the ETF data once
+        etf_data = {
+            "symbol": symbol,
+            "name": name,
+            "price": current_price,
+            "rsi": rsi_3
+        }
 
-    # 2. Evaluate Market Regime (No Ledger Save needed)
-    if not valid_targets:
-        log.info("  🐻 Bear Market Regime: No ETFs met the trend criteria.")
-        log.info("  🏁 Script finished successfully without buying.")
+        # 1. Always add to the master fallback list
+        all_targets.append(etf_data)
+
+        # 2. Add to the premium valid list ONLY if it passes the trend filter
+        if current_price > dma_50 and dma_50 > dma_100:
+            valid_targets.append(etf_data)
+
+    if not all_targets:
+        log.error("  🔴 Critical: No data found for any ETFs. Check API.")
         return
 
-    # 3. Select Target (Lowest RSI_3)
-    best_etf = sorted(valid_targets, key=lambda x: x['rsi'])[0]
+    # --- THE HYBRID SELECTION LOGIC ---
+    if valid_targets:
+        # Tier 1: Pick the most oversold ETF that is in a confirmed uptrend
+        log.info("  📈 Found ETFs in an uptrend. Applying strict Trend Selection.")
+        best_etf = sorted(valid_targets, key=lambda x: x['rsi'])[0]
+    else:
+        # Tier 2: Bear Market. Pick the most oversold ETF from the entire watchlist.
+        log.info("  🐻 Bear Market Regime: No uptrends found. Applying Fallback Selection.")
+        best_etf = sorted(all_targets, key=lambda x: x['rsi'])[0]
     
-    # 4. NEW Execute Trade Rules (Stateless Quantity Logic)
+    # Execution Math
     qty = max(1, int(DAILY_ALLOCATION // best_etf['price']))
-    
     limit_price = round(best_etf['price'] * 1.001, 2) 
     total_cost = round(qty * limit_price, 2)
 
@@ -267,7 +243,6 @@ def run_strategy() -> None:
     except Exception as e:
         log.error(f"  🔴 Order placement FAILED: {e}")
         
-    # Give cloud logs time to flush before shutdown
     import time
     time.sleep(2)
 
