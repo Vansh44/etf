@@ -9,7 +9,8 @@ from growwapi import GrowwAPI
 import os
 from holidays import NSE_MARKET_HOLIDAYS
 from watchlist import ETF_WATCHLIST
-
+from dotenv import load_dotenv
+load_dotenv()
 
 
 # ─────────────────────────────────────────────
