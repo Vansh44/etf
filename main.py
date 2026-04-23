@@ -1,6 +1,3 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import logging
 import datetime
 import pyotp
@@ -100,39 +97,6 @@ def get_historical_dataframe(groww: GrowwAPI, symbol: str) -> pd.DataFrame:
         log.error(f"  🔴 Error fetching data for {symbol}: {e}")
         return pd.DataFrame()
 
-# ─────────────────────────────────────────────
-#  NOTIFICATIONS
-# ─────────────────────────────────────────────
-def send_trade_email(name: str, symbol: str, units: int, price: float, total_cost: float, order_id: str):
-    if not all([EMAIL_SENDER, EMAIL_PASSWORD, EMAIL_RECEIVER]):
-        log.warning("  ⚠ Email credentials missing. Skipping email notification.")
-        return
-
-    subject = f"🟢 ETF Bot Trade: Bought {units}x {symbol}"
-    body = (
-        "Cloud automation successfully executed a trade.\n\n"
-        f"Asset      : {name} ({symbol})\n"
-        f"Units      : {units}\n"
-        f"Limit Price: ₹{price:.2f}\n"
-        f"Total Cost : ₹{total_cost:.2f}\n"
-        f"Order ID   : {order_id}"
-    )
-
-    msg = MIMEMultipart()
-    msg['From'] = EMAIL_SENDER
-    msg['To'] = EMAIL_RECEIVER
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'plain'))
-
-    try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        server.send_message(msg)
-        server.quit()
-        log.info("  📧 Email notification sent successfully.")
-    except Exception as e:
-        log.error(f"  🔴 Failed to send email: {e}")
 
 # ─────────────────────────────────────────────
 #  STRATEGY LOGIC
@@ -185,7 +149,7 @@ def run_strategy() -> None:
         all_targets.append(etf_data)
 
         # 2. Add to the premium valid list ONLY if it passes the trend filter
-        if current_price > dma_50 and dma_50 > dma_100:
+        if current_price > dma_100:
             valid_targets.append(etf_data)
 
     if not all_targets:
@@ -231,15 +195,6 @@ def run_strategy() -> None:
         status = order_response.get('order_status', 'N/A')
         log.info(f"  🟢 ORDER PLACED. Status: {status} | ID: {order_id}")
 
-        if status.upper() in ["PLACED", "SUCCESS", "COMPLETED", "OPEN"]:
-            send_trade_email(
-                name=best_etf['name'], 
-                symbol=best_etf['symbol'], 
-                units=qty, 
-                price=limit_price, 
-                total_cost=total_cost, 
-                order_id=order_id
-            )
 
     except Exception as e:
         log.error(f"  🔴 Order placement FAILED: {e}")
