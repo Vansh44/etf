@@ -6,6 +6,7 @@ from growwapi import GrowwAPI
 import os
 from holidays import NSE_MARKET_HOLIDAYS
 from watchlist import ETF_WATCHLIST
+import time
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -43,13 +44,12 @@ def get_groww_client() -> GrowwAPI:
     return GrowwAPI(access_token)
 
 # ─────────────────────────────────────────────
-#  API HELPERS & TECHNICAL ANALYSIS
+#  DATA & INDICATORS
 # ─────────────────────────────────────────────
 def get_historical_dataframe(groww: GrowwAPI, symbol: str) -> pd.DataFrame:
-    """Fetches historical data and calculates indicators using pure Pandas."""
     try:
         end_dt   = datetime.datetime.now()
-        start_dt = end_dt - datetime.timedelta(days=300) 
+        start_dt = end_dt - datetime.timedelta(days=300)
 
         response = groww.get_historical_candle_data(
             trading_symbol=symbol,
@@ -57,43 +57,33 @@ def get_historical_dataframe(groww: GrowwAPI, symbol: str) -> pd.DataFrame:
             segment=groww.SEGMENT_CASH,
             start_time=start_dt.strftime("%Y-%m-%d %H:%M:%S"),
             end_time=end_dt.strftime("%Y-%m-%d %H:%M:%S"),
-            interval_in_minutes=1440, 
+            interval_in_minutes=1440,
         )
 
         candles = response.get("candles", [])
         if len(candles) < 100:
-            log.warning(f"  ⚠ Not enough historical data for {symbol} to calculate 100-DMA.")
+            log.warning(f"  ⚠ Not enough data for {symbol}.")
             return pd.DataFrame()
 
         df = pd.DataFrame(candles, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['close'] = df['close'].astype(float)
-        
-        # ─────────────────────────────────────────────
-        # NATIVE PANDAS INDICATOR CALCULATIONS
-        # ─────────────────────────────────────────────
-        # 1. Simple Moving Averages
-        df['50_DMA'] = df['close'].rolling(window=50).mean()
+        df['daily_return'] = df['close'].pct_change() * 100
+        df['50_DMA']  = df['close'].rolling(window=50).mean()
         df['100_DMA'] = df['close'].rolling(window=100).mean()
-        
-        # 2. 3-Period RSI (Wilder's Smoothing)
-        delta = df['close'].diff()
-        gain = delta.where(delta > 0, 0.0)
-        loss = -delta.where(delta < 0, 0.0)
-        
-        # EMA for gains and losses using alpha = 1/period
+
+        delta    = df['close'].diff()
+        gain     = delta.where(delta > 0, 0.0)
+        loss     = -delta.where(delta < 0, 0.0)
         avg_gain = gain.ewm(alpha=1/3, adjust=False).mean()
         avg_loss = loss.ewm(alpha=1/3, adjust=False).mean()
-        
-        rs = avg_gain / avg_loss
+        rs = avg_gain / avg_loss.replace(0, 1e-10)
         df['RSI_3'] = 100 - (100 / (1 + rs))
-        # ─────────────────────────────────────────────
-        
+
         return df
 
     except Exception as e:
         log.error(f"  🔴 Error fetching data for {symbol}: {e}")
         return pd.DataFrame()
-
 
 # ─────────────────────────────────────────────
 #  STRATEGY LOGIC
@@ -103,10 +93,12 @@ def run_strategy() -> None:
     log.info(f"  Quant Strategy Run (HYBRID)  |  {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     log.info("=" * 60)
 
-    # --- HOLIDAY & WEEKEND GATEKEEPER ---
     today = datetime.date.today()
-    if today.weekday() >= 5 or today.strftime("%Y-%m-%d") in NSE_MARKET_HOLIDAYS:
-        log.info("  🛑 MARKET CLOSED. Skipping execution.")
+    if today.weekday() >= 5:
+        log.info("  🛑 MARKET CLOSED. Weekend. Skipping execution.")
+        return
+    if today.strftime("%Y-%m-%d") in NSE_MARKET_HOLIDAYS:
+        log.info("  🛑 MARKET CLOSED. Public holiday. Skipping execution.")
         return
 
     try:
@@ -115,37 +107,36 @@ def run_strategy() -> None:
         log.error(f"Authentication failed: {e}")
         return
 
-    log.info(f"  💰 Daily Target Allocation: ₹{DAILY_ALLOCATION:.2f}")
+    log.info(f"  💰 Daily Target Allocation: Rs.{DAILY_ALLOCATION:.2f}")
 
     valid_targets = []
-    all_targets = []
-    
+    all_targets   = []
+
     for symbol, name in ETF_WATCHLIST.items():
         df = get_historical_dataframe(groww, symbol)
-        
+
         if df.empty or df['RSI_3'].isna().iloc[-1]:
             continue
-            
-        latest = df.iloc[-1]
+
+        latest        = df.iloc[-1]
         current_price = latest['close']
-        dma_50 = latest['50_DMA']
-        dma_100 = latest['100_DMA'] 
-        rsi_3 = latest['RSI_3']
+        dma_50        = latest['50_DMA']
+        dma_100       = latest['100_DMA']
+        rsi_3         = latest['RSI_3']
+        daily_return  = latest['daily_return']
 
-        log.info(f"  📊 {symbol:<12} | P: ₹{current_price:>7.2f} | 50DMA: {dma_50:>7.2f} | 100DMA: {dma_100:>7.2f} | RSI: {rsi_3:>5.2f}")
+        log.info(f"  📊 {symbol:<12} | P: Rs.{current_price:>7.2f} | 50DMA: {dma_50:>7.2f} | 100DMA: {dma_100:>7.2f} | RSI: {rsi_3:>5.2f} | Day Return: {daily_return:5.2f}%")
 
-        # Store the ETF data once
         etf_data = {
-            "symbol": symbol,
-            "name": name,
-            "price": current_price,
-            "rsi": rsi_3
+            "symbol":       symbol,
+            "name":         name,
+            "price":        current_price,
+            "rsi":          rsi_3,
+            "daily_return": daily_return,
         }
 
-        # 1. Always add to the master fallback list
         all_targets.append(etf_data)
 
-        # 2. Add to the premium valid list ONLY if it passes the trend filter
         if current_price > dma_100:
             valid_targets.append(etf_data)
 
@@ -153,26 +144,24 @@ def run_strategy() -> None:
         log.error("  🔴 Critical: No data found for any ETFs. Check API.")
         return
 
-    # --- THE HYBRID SELECTION LOGIC ---
     if valid_targets:
-        # Tier 1: Pick the most oversold ETF that is in a confirmed uptrend
         log.info("  📈 Found ETFs in an uptrend. Applying strict Trend Selection.")
         best_etf = sorted(valid_targets, key=lambda x: x['rsi'])[0]
+        regime   = "Uptrend"
     else:
-        # Tier 2: Bear Market. Pick the most oversold ETF from the entire watchlist.
         log.info("  🐻 Bear Market Regime: No uptrends found. Applying Fallback Selection.")
         best_etf = sorted(all_targets, key=lambda x: x['rsi'])[0]
-    
-    # Execution Math
-    qty = max(1, int(DAILY_ALLOCATION // best_etf['price']))
-    limit_price = round(best_etf['price'] * 1.001, 2) 
-    total_cost = round(qty * limit_price, 2)
+        regime   = "Bear market"
 
-    log.info("\n" + "─" * 60)
-    log.info(f"  ✅ TARGET ACQUIRED : {best_etf['name']} ({best_etf['symbol']})")
-    log.info(f"  📊 Lowest RSI(3)   : {best_etf['rsi']:.2f}")
-    log.info(f"  🛒 Executing Order : {qty} units @ ₹{limit_price:.2f} LIMIT")
-    log.info("─" * 60)
+    qty         = max(1, int(DAILY_ALLOCATION // best_etf['price']))
+    limit_price = round(best_etf['price'], 2)
+    total_cost  = round(qty * limit_price, 2)
+
+    log.info("\n" + "-" * 60)
+    log.info(f"  TARGET ACQUIRED : {best_etf['name']} ({best_etf['symbol']})")
+    log.info(f"  Lowest RSI(3)   : {best_etf['rsi']:.2f}")
+    log.info(f"  Executing Order : {qty} units @ Rs.{limit_price:.2f} LIMIT")
+    log.info("-" * 60)
 
     try:
         order_response = groww.place_order(
@@ -181,22 +170,24 @@ def run_strategy() -> None:
             validity=groww.VALIDITY_DAY,
             exchange=groww.EXCHANGE_NSE,
             segment=groww.SEGMENT_CASH,
-            product=groww.PRODUCT_CNC,           
-            order_type=groww.ORDER_TYPE_LIMIT,  
-            price=limit_price,                  
+            product=groww.PRODUCT_CNC,
+            order_type=groww.ORDER_TYPE_LIMIT,
+            price=limit_price,
             transaction_type=groww.TRANSACTION_TYPE_BUY,
             order_reference_id=f"ETF{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
         )
-        
-        order_id = order_response.get('groww_order_id', 'N/A')
-        status = order_response.get('order_status', 'N/A')
-        log.info(f"  🟢 ORDER PLACED. Status: {status} | ID: {order_id}")
 
+        order_id = order_response.get('groww_order_id', 'N/A')
+        status   = order_response.get('order_status', 'N/A')
+        
+        # Native logging takes the place of the email webhook
+        log.info(f"  ✅ ORDER PLACED SUCCESSFULLY.")
+        log.info(f"  Status: {status} | ID: {order_id} | Regime: {regime}")
+        log.info(f"  Check the Groww app for final execution confirmation.")
 
     except Exception as e:
         log.error(f"  🔴 Order placement FAILED: {e}")
-        
-    import time
+
     time.sleep(2)
 
 if __name__ == "__main__":
