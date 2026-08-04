@@ -1,17 +1,44 @@
 #!/usr/bin/env python3
 """
-main.py — ETF BUY ADVISOR
-========================
-Tells you which ETF to buy and how many units. It places NO orders — you place
-the trade yourself in the Groww app.
+main.py — CHEAPEST-ETF BUY ADVISOR
+=================================
+Tells you which ETF is cheapest right now and how many units to buy. It places
+NO orders — you place the trade yourself in the Groww app.
 
   1. Pulls a year of daily closes for every watchlist ETF.
-  2. Scores each on RSI(3) against its own history.
-  3. Prefers ETFs in an uptrend (above their 100-day average) and picks the most
-     oversold of those — lowest RSI. If none are, it ranks the whole watchlist.
-  4. Prints the pick, a suggested limit price, and how many units fit BUDGET.
-  5. Logs a value/weight table of everything in portfolio.py so you can see
-     where you stand. Those units do not affect the pick.
+  2. TREND CHECK — decides which ETFs are eligible at all:
+       above its 50-day average                  -> keep
+       below the 50-day, but above the 14-day     -> keep (dip that is turning up)
+       below BOTH the 50-day and the 14-day       -> discard (still falling)
+  3. Scores the survivors on CHEAPNESS, 0-100, higher = cheaper. Ranks
+     cheapest first.
+  4. Skips any ETF already over MAX_WEIGHT_PCT of your portfolio or too
+     expensive for BUDGET, and recommends the first that fits.
+  5. Prints a suggested limit price and how many units fit BUDGET, plus a
+     value/weight table of everything in portfolio.py.
+
+HOW CHEAPNESS IS MEASURED
+Each ETF is scored against ITS OWN history, never against the other ETFs. That
+matters: a 5% dip is routine for MON100 (median dip 4.0%) but extreme for
+MAKEINDIA (median 1.7%), so ranking on raw drawdown would just pick the
+twitchiest ETF every week. Two components, both percentiles, both 0-100:
+
+  A. PRICE POSITION — where the live price sits inside its own trailing 1-year
+     range of closes. 0 = at its 52-week low.
+     Cheapness contribution = 100 - price_percentile
+
+  B. DIP UNUSUALNESS — today's drawdown from its 50-day high, ranked against
+     its own past year of drawdowns. 90 means "deeper than 90% of the dips
+     this ETF normally has."
+     Cheapness contribution = drawdown_percentile
+
+  cheapness = (A + B) / 2
+
+A score of 75 means the same thing for gold as for small-caps.
+
+Cheapness decides the ORDER; the trend check decides who is in the race at all.
+An ETF sliding under both its averages is dropped no matter how cheap it looks,
+so a steadily-falling ETF cannot sit at rank 1 week after week.
 
 DATA SOURCE — Yahoo Finance, free, no API key, no account.
 Validated against Groww's own live prices: for the 2026-06-08 session,
@@ -44,8 +71,15 @@ import portfolio
 # ─────────────────────────────────────────────
 LIMIT_BUFFER_PCT = 0.20    # suggested limit sits this % above the live price
 NSE_TICK         = 0.01    # NSE cash-segment tick size
-MIN_CANDLES      = 100     # the 100-day average needs at least this many
+MIN_CANDLES      = 100     # below this an ETF cannot be scored
 HISTORY_PERIOD   = "1y"    # how much daily history to pull
+
+PRICE_WINDOW    = 252      # trailing sessions for the price-position percentile
+HIGH_LOOKBACK   = 50       # sessions for the "recent high" used in the drawdown
+MIN_DD_HISTORY  = 20       # fewer drawdown samples than this -> score it neutral
+
+TREND_LONG      = 50       # first trend test: the 50-day average
+TREND_SHORT     = 14       # second chance: the 14-day average
 
 # A 5-minute bar wildly off the last daily close means a bad tick or a bad
 # symbol, not a real move. Fall back to the daily close instead of trusting it.
@@ -158,23 +192,67 @@ def fetch_live_prices(symbols: list, last_closes: dict):
     return prices, as_of
 
 
-def indicators(closes: pd.Series) -> dict:
-    """RSI(3) plus the 50- and 100-day averages, from a series of daily closes."""
-    delta    = closes.diff()
-    gain     = delta.where(delta > 0, 0.0)
-    loss     = -delta.where(delta < 0, 0.0)
-    avg_gain = gain.ewm(alpha=1/3, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1/3, adjust=False).mean()
-    rs  = avg_gain / avg_loss.replace(0, 1e-10)
-    rsi = 100 - (100 / (1 + rs))
+def passes_trend(closes: pd.Series, live_price: float):
+    """
+    (keep, label, detail) — is this ETF eligible to be ranked at all?
+
+      above the 50-day average                 -> keep
+      below the 50-day, above the 14-day       -> keep, the dip is turning up
+      below both                               -> discard, still falling
+
+    Which reduces to: discard only when the price is under BOTH averages.
+    """
+    dma_long  = closes.rolling(TREND_LONG).mean().iloc[-1]
+    dma_short = closes.rolling(TREND_SHORT).mean().iloc[-1]
+
+    if pd.isna(dma_long) or pd.isna(dma_short):
+        return False, "no data", "not enough history for the moving averages"
+
+    if live_price > dma_long:
+        return True, f">{TREND_LONG}D", (f"Rs.{live_price:,.2f} above its {TREND_LONG}-day "
+                                        f"avg Rs.{dma_long:,.2f}")
+    if live_price > dma_short:
+        return True, f">{TREND_SHORT}D", (f"Rs.{live_price:,.2f} under its {TREND_LONG}-day avg "
+                                         f"Rs.{dma_long:,.2f} but above its {TREND_SHORT}-day "
+                                         f"avg Rs.{dma_short:,.2f} — turning up")
+    return False, "below both", (f"Rs.{live_price:,.2f} under both its {TREND_LONG}-day avg "
+                                 f"Rs.{dma_long:,.2f} and {TREND_SHORT}-day avg "
+                                 f"Rs.{dma_short:,.2f} — still falling")
+
+
+def score_cheapness(closes: pd.Series, live_price: float) -> dict:
+    """
+    Cheapness 0-100, higher = cheaper. See the module docstring for the method.
+
+    Scored against this ETF's own history so a volatile ETF and a steady one are
+    directly comparable.
+    """
+    n      = len(closes)
+    window = min(PRICE_WINDOW, n)
+    look   = min(HIGH_LOOKBACK, n)
+
+    # ── A. where does the live price sit in its own trailing range? ──
+    recent       = closes.tail(window)
+    price_pctile = float((recent < live_price).sum()) / len(recent) * 100
+
+    # ── B. how unusual is today's dip for this ETF? ──
+    recent_high = max(float(closes.tail(look).max()), live_price)  # live can be a new high
+    dd_now      = (recent_high - live_price) / recent_high * 100 if recent_high > 0 else 0.0
+
+    roll_high = closes.rolling(look).max()
+    dd_hist   = ((roll_high - closes) / roll_high * 100).dropna().tail(window)
+    if len(dd_hist) >= MIN_DD_HISTORY:
+        dd_pctile = float((dd_hist < dd_now).sum()) / len(dd_hist) * 100
+    else:
+        dd_pctile = 50.0     # no baseline to judge against, stay neutral
 
     return {
-        "close":   float(closes.iloc[-1]),
-        "dma50":   float(closes.rolling(50).mean().iloc[-1]),
-        "dma100":  float(closes.rolling(100).mean().iloc[-1]),
-        "rsi":     float(rsi.iloc[-1]),
-        "day_pct": float(closes.pct_change().iloc[-1] * 100),
-        "as_of":   closes.index[-1],
+        "cheapness":    ((100.0 - price_pctile) + dd_pctile) / 2,
+        "price_pctile": price_pctile,
+        "dd_now":       dd_now,
+        "dd_pctile":    dd_pctile,
+        "close":        float(closes.iloc[-1]),
+        "day_pct":      float(closes.pct_change().iloc[-1] * 100),
     }
 
 # ─────────────────────────────────────────────
@@ -225,34 +303,55 @@ def suggest_order(live_price: float, budget: float):
     return qty, limit, round(qty * limit, 2)
 
 
-def rank_watchlist(history: dict):
-    """(ranked, regime). Ranked best-first by RSI ascending."""
-    uptrend, everything = [], []
+def rank_by_cheapness(history: dict, prices: dict) -> list:
+    """
+    Watchlist ETFs that pass the trend check, cheapest first.
+
+    The trend check runs FIRST, so an ETF under both its averages is out of the
+    running however cheap it scores.
+    """
+    scored, discarded = [], []
 
     for symbol, name in ETF_WATCHLIST.items():
         if symbol not in history:
             continue
-        ind = indicators(history[symbol])
-        if pd.isna(ind["rsi"]) or pd.isna(ind["dma100"]):
-            log.warning(f"  ⚠ {symbol}: indicators incomplete, skipping.")
+        live = float(prices.get(symbol, 0.0) or 0.0)
+        if live <= 0:
+            log.warning(f"  ⚠ {symbol}: no usable price, skipping.")
             continue
 
-        log.info(f"  📊 {symbol:<12} | Close: Rs.{ind['close']:>8.2f} "
-                 f"| 50DMA: {ind['dma50']:>8.2f} | 100DMA: {ind['dma100']:>8.2f} "
-                 f"| RSI: {ind['rsi']:>5.2f} | Day: {ind['day_pct']:>5.2f}%")
+        keep, label, detail = passes_trend(history[symbol], live)
+        if not keep:
+            discarded.append((symbol, detail))
+            continue
 
-        entry = {"symbol": symbol, "name": name, **ind}
-        everything.append(entry)
-        if ind["close"] > ind["dma100"]:
-            uptrend.append(entry)
+        result = score_cheapness(history[symbol], live)
+        if pd.isna(result["cheapness"]):
+            log.warning(f"  ⚠ {symbol}: could not be scored, skipping.")
+            continue
+        scored.append({"symbol": symbol, "name": name, "live": live,
+                       "trend": label, "trend_detail": detail, **result})
 
-    if not everything:
-        return [], ""
-    if uptrend:
-        log.info("  📈 Uptrend regime — ranking ETFs above their 100-day average.")
-        return sorted(uptrend, key=lambda e: e["rsi"]), "Uptrend"
-    log.info("  🐻 Bear regime — nothing above its 100-day average, ranking the whole pool.")
-    return sorted(everything, key=lambda e: e["rsi"]), "Bear market"
+    if discarded:
+        log.info("  🚫 DISCARDED — under both moving averages, still falling:")
+        for symbol, detail in discarded:
+            log.info(f"     {symbol:<12} {detail}")
+
+    scored.sort(key=lambda e: -e["cheapness"])
+
+    if scored:
+        log.info("  📉 CHEAPNESS — each ETF vs its OWN history, higher = cheaper")
+        log.info(f"     {'#':<3}{'ETF':<12}{'Score':>7}{'in own range':>14}"
+                 f"{'dip now':>9}{'dip vs own':>12}{'trend':>12}")
+        for i, e in enumerate(scored, 1):
+            log.info(f"     {i:<3}{e['symbol']:<12}{e['cheapness']:>7.1f}"
+                     f"{e['price_pctile']:>13.0f}%{e['dd_now']:>8.1f}%"
+                     f"{e['dd_pctile']:>11.0f}%{e['trend']:>12}")
+        log.info("     in own range = price position in its 1-yr range (low = cheap)")
+        log.info("     dip vs own   = how unusual today's dip is for it (high = cheap)")
+        log.info(f"     trend        = which test kept it in (>{TREND_LONG}D or >{TREND_SHORT}D)")
+
+    return scored
 
 # ─────────────────────────────────────────────
 #  MAIN
@@ -286,35 +385,48 @@ def main() -> None:
 
     total, rows = portfolio_snapshot(prices)
     log_portfolio(rows, total)
+    weights = {row["symbol"]: row["weight"] for row in rows}
 
-    ranked, regime = rank_watchlist(history)
+    ranked = rank_by_cheapness(history, prices)
     if not ranked:
-        log.error("  🔴 No watchlist ETF could be scored. Check the symbols in watchlist.py.")
+        log.error("  🔴 Nothing eligible — every watchlist ETF is under both its 50-day "
+                  "and 14-day averages. Buy nothing this round.")
         return
 
     pick = None
     for candidate in ranked:
-        live = float(prices.get(candidate["symbol"], 0.0) or 0.0)
-        if live <= 0:
-            log.warning(f"  ⚠ {candidate['symbol']} skipped: no usable price.")
+        symbol = candidate["symbol"]
+
+        weight = weights.get(symbol, 0.0)
+        if weight > portfolio.MAX_WEIGHT_PCT:
+            log.info(f"  ⏭  {symbol} skipped: already {weight:.1f}% of the portfolio "
+                     f"(cap {portfolio.MAX_WEIGHT_PCT:.0f}%).")
             continue
-        qty, limit_price, cost = suggest_order(live, budget)
+
+        qty, limit_price, cost = suggest_order(candidate["live"], budget)
         if qty < 1:
-            log.info(f"  ⏭  {candidate['symbol']} skipped: one unit costs "
+            log.info(f"  ⏭  {symbol} skipped: one unit costs "
                      f"Rs.{limit_price:,.2f}, over the Rs.{budget:,.2f} budget.")
             continue
-        pick = {**candidate, "live": live, "qty": qty,
-                "limit_price": limit_price, "cost": cost}
+
+        pick = {**candidate, "qty": qty, "limit_price": limit_price,
+                "cost": cost, "weight": weight}
         break
 
     if pick is None:
-        log.error(f"  🔴 Nothing affordable — one unit of every candidate costs more "
-                  f"than Rs.{budget:,.2f}.")
+        log.error(f"  🔴 Nothing qualified — every candidate was over the "
+                  f"{portfolio.MAX_WEIGHT_PCT:.0f}% cap or over Rs.{budget:,.2f}.")
         return
 
     log.info("-" * 72)
     log.info(f"  👉 BUY        : {pick['name']} ({pick['symbol']})")
-    log.info(f"  Why          : lowest RSI(3) at {pick['rsi']:.2f} in the {regime} regime")
+    log.info(f"  Cheapness    : {pick['cheapness']:.1f}/100 — "
+             f"{pick['dd_now']:.1f}% off its {HIGH_LOOKBACK}-day high, deeper than "
+             f"{pick['dd_pctile']:.0f}% of its own dips, sitting at the "
+             f"{pick['price_pctile']:.0f}th percentile of its 1-year range")
+    log.info(f"  Trend        : {pick['trend_detail']}")
+    log.info(f"  Portfolio    : currently {pick['weight']:.1f}% of your holdings "
+             f"(cap {portfolio.MAX_WEIGHT_PCT:.0f}%)")
     log.info(f"  Live price   : Rs.{pick['live']:,.2f}")
     log.info(f"  Suggested    : {pick['qty']} units @ LIMIT Rs.{pick['limit_price']:,.2f} "
              f"= Rs.{pick['cost']:,.2f}  (price +{LIMIT_BUFFER_PCT:.2f}%)")

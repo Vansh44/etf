@@ -418,71 +418,44 @@
 2026-06-09 00:28:35,368  INFO      ------------------------------------------------------------
 2026-06-09 00:28:35,548  ERROR       🔴 Order failed for MON100: Your registered IPs are currently inactive.. Trying next.
 2026-06-09 00:28:35,549  ERROR       🔴 All candidates failed. No order placed today.
-2026-08-05 02:25:11,615  INFO      ========================================================================
-2026-08-05 02:25:11,615  INFO        ETF Buy Advisor  |  2026-08-05 02:25:11 IST  |  data: Yahoo Finance
-2026-08-05 02:25:11,615  INFO      ========================================================================
-2026-08-05 02:25:11,615  INFO        💰 Budget Rs.2,500.00
-2026-08-05 02:25:13,513  INFO        🕒 Live prices as of 2026-08-04 15:25 IST (Yahoo 5-min bars, may lag ~15 min)
-2026-08-05 02:25:13,513  INFO        📦 PORTFOLIO
-2026-08-05 02:25:13,513  INFO           ETF           Units     Price       Value   Weight
-2026-08-05 02:25:13,513  INFO           GOLDBEES         92    117.13      10,776    39.0%
-2026-08-05 02:25:13,513  INFO           SILVERBEES       20    207.35       4,147    15.0%
-2026-08-05 02:25:13,513  INFO           MODEFENCE        39    103.00       4,017    14.5%
-2026-08-05 02:25:13,513  INFO           INFRAIETF        30     97.72       2,932    10.6%
-2026-08-05 02:25:13,513  INFO           MOMIDMTM         45     64.22       2,890    10.5%
-2026-08-05 02:25:13,513  INFO           MAKEINDIA        12    167.01       2,004     7.3%
-2026-08-05 02:25:13,513  INFO           ALPHA            10     52.70         527     1.9%
-2026-08-05 02:25:13,513  INFO           MON100            1    316.35         316     1.1%
-2026-08-05 02:25:13,513  INFO           BFSI              0     27.80           0     0.0%
-2026-08-05 02:25:13,513  INFO           TOTAL                              27,609
-2026-08-05 02:25:13,516  INFO        📊 MOMIDMTM     | Close: Rs.   63.80 | 50DMA:    63.73 | 100DMA:    62.36 | RSI: 69.11 | Day: -0.27%
-2026-08-05 02:25:13,517  INFO        📊 ALPHA        | Close: Rs.   52.24 | 50DMA:    51.11 | 100DMA:    49.36 | RSI: 79.12 | Day:  0.60%
-2026-08-05 02:25:13,518  INFO        📊 MODEFENCE    | Close: Rs.  102.98 | 50DMA:   102.22 | 100DMA:    97.85 | RSI: 72.47 | Day:  0.63%
-2026-08-05 02:25:13,519  INFO        📊 MAKEINDIA    | Close: Rs.  167.01 | 50DMA:   161.80 | 100DMA:   158.04 | RSI: 82.17 | Day: -0.17%
-2026-08-05 02:25:13,520  INFO        📊 BFSI         | Close: Rs.   27.80 | 50DMA:    27.18 | 100DMA:    26.80 | RSI: 72.30 | Day: -0.36%
-2026-08-05 02:25:13,521  INFO        📊 MON100       | Close: Rs.  315.45 | 50DMA:   328.20 | 100DMA:   302.37 | RSI: 54.71 | Day:  3.37%
-2026-08-05 02:25:13,521  INFO        📊 INFRAIETF    | Close: Rs.   97.01 | 50DMA:    96.22 | 100DMA:    94.95 | RSI: 62.37 | Day: -0.52%
-2026-08-05 02:25:13,522  INFO        📈 Uptrend regime — ranking ETFs above their 100-day average.
-2026-08-05 02:25:13,522  INFO      ------------------------------------------------------------------------
-2026-08-05 02:25:13,522  INFO        👉 BUY        : Motilal Oswal NASDAQ 100 ETF (MON100)
-2026-08-05 02:25:13,522  INFO        Why          : lowest RSI(3) at 54.71 in the Uptrend regime
-2026-08-05 02:25:13,522  INFO        Live price   : Rs.316.35
-2026-08-05 02:25:13,522  INFO        Suggested    : 7 units @ LIMIT Rs.316.98 = Rs.2,218.86  (price +0.20%)
-2026-08-05 02:25:13,522  INFO        Left unspent : Rs.281.14
-2026-08-05 02:25:13,522  INFO      ------------------------------------------------------------------------
-2026-08-05 02:25:13,522  INFO        Place this yourself in the Groww app — confirm the live price there first.
-2026-08-05 02:25:13,522  INFO        After it fills, set UNITS['MON100'] = 8 in portfolio.py
-2026-08-05 02:27:21,749  INFO      ========================================================================
-2026-08-05 02:27:21,749  INFO        ETF Buy Advisor  |  2026-08-05 02:27:21 IST  |  data: Yahoo Finance
-2026-08-05 02:27:21,749  INFO      ========================================================================
-2026-08-05 02:27:21,749  INFO        💰 Budget Rs.2,500.00
-2026-08-05 02:27:23,596  INFO        🕒 Live prices as of 2026-08-04 15:25 IST (Yahoo 5-min bars, may lag ~15 min)
-2026-08-05 02:27:23,596  INFO        📦 PORTFOLIO
-2026-08-05 02:27:23,596  INFO           ETF           Units     Price       Value   Weight
-2026-08-05 02:27:23,596  INFO           GOLDBEES         92    117.13      10,776    39.0%
-2026-08-05 02:27:23,596  INFO           SILVERBEES       20    207.35       4,147    15.0%
-2026-08-05 02:27:23,596  INFO           MODEFENCE        39    103.00       4,017    14.5%
-2026-08-05 02:27:23,596  INFO           INFRAIETF        30     97.72       2,932    10.6%
-2026-08-05 02:27:23,596  INFO           MOMIDMTM         45     64.22       2,890    10.5%
-2026-08-05 02:27:23,596  INFO           MAKEINDIA        12    167.01       2,004     7.3%
-2026-08-05 02:27:23,596  INFO           ALPHA            10     52.70         527     1.9%
-2026-08-05 02:27:23,596  INFO           MON100            1    316.35         316     1.1%
-2026-08-05 02:27:23,596  INFO           BFSI              0     27.80           0     0.0%
-2026-08-05 02:27:23,597  INFO           TOTAL                              27,609
-2026-08-05 02:27:23,601  INFO        📊 MOMIDMTM     | Close: Rs.   63.80 | 50DMA:    63.73 | 100DMA:    62.36 | RSI: 69.11 | Day: -0.27%
-2026-08-05 02:27:23,603  INFO        📊 ALPHA        | Close: Rs.   52.24 | 50DMA:    51.11 | 100DMA:    49.36 | RSI: 79.12 | Day:  0.60%
-2026-08-05 02:27:23,604  INFO        📊 MODEFENCE    | Close: Rs.  102.98 | 50DMA:   102.22 | 100DMA:    97.85 | RSI: 72.47 | Day:  0.63%
-2026-08-05 02:27:23,605  INFO        📊 MAKEINDIA    | Close: Rs.  167.01 | 50DMA:   161.80 | 100DMA:   158.04 | RSI: 82.17 | Day: -0.17%
-2026-08-05 02:27:23,607  INFO        📊 BFSI         | Close: Rs.   27.80 | 50DMA:    27.18 | 100DMA:    26.80 | RSI: 72.30 | Day: -0.36%
-2026-08-05 02:27:23,608  INFO        📊 MON100       | Close: Rs.  315.45 | 50DMA:   328.20 | 100DMA:   302.37 | RSI: 54.71 | Day:  3.37%
-2026-08-05 02:27:23,610  INFO        📊 INFRAIETF    | Close: Rs.   97.01 | 50DMA:    96.22 | 100DMA:    94.95 | RSI: 62.37 | Day: -0.52%
-2026-08-05 02:27:23,610  INFO        📈 Uptrend regime — ranking ETFs above their 100-day average.
-2026-08-05 02:27:23,610  INFO      ------------------------------------------------------------------------
-2026-08-05 02:27:23,610  INFO        👉 BUY        : Motilal Oswal NASDAQ 100 ETF (MON100)
-2026-08-05 02:27:23,610  INFO        Why          : lowest RSI(3) at 54.71 in the Uptrend regime
-2026-08-05 02:27:23,610  INFO        Live price   : Rs.316.35
-2026-08-05 02:27:23,610  INFO        Suggested    : 7 units @ LIMIT Rs.316.98 = Rs.2,218.86  (price +0.20%)
-2026-08-05 02:27:23,610  INFO        Left unspent : Rs.281.14
-2026-08-05 02:27:23,610  INFO      ------------------------------------------------------------------------
-2026-08-05 02:27:23,610  INFO        Place this yourself in the Groww app — confirm the live price there first.
-2026-08-05 02:27:23,610  INFO        After it fills, set UNITS['MON100'] = 8 in portfolio.py
+2026-08-05 03:05:49,219  INFO      ========================================================================
+2026-08-05 03:05:49,219  INFO        ETF Buy Advisor  |  2026-08-05 03:05:49 IST  |  data: Yahoo Finance
+2026-08-05 03:05:49,219  INFO      ========================================================================
+2026-08-05 03:05:49,219  INFO        💰 Budget Rs.2,500.00
+2026-08-05 03:05:51,431  INFO        🕒 Live prices as of 2026-08-04 15:25 IST (Yahoo 5-min bars, may lag ~15 min)
+2026-08-05 03:05:51,431  INFO        📦 PORTFOLIO
+2026-08-05 03:05:51,431  INFO           ETF           Units     Price       Value   Weight
+2026-08-05 03:05:51,431  INFO           GOLDBEES         92    117.13      10,776    39.0%
+2026-08-05 03:05:51,431  INFO           SILVERBEES       20    207.35       4,147    15.0%
+2026-08-05 03:05:51,431  INFO           MODEFENCE        39    103.00       4,017    14.5%
+2026-08-05 03:05:51,431  INFO           INFRAIETF        30     97.72       2,932    10.6%
+2026-08-05 03:05:51,431  INFO           MOMIDMTM         45     64.22       2,890    10.5%
+2026-08-05 03:05:51,431  INFO           MAKEINDIA        12    167.01       2,004     7.3%
+2026-08-05 03:05:51,431  INFO           ALPHA            10     52.70         527     1.9%
+2026-08-05 03:05:51,431  INFO           MON100            1    316.35         316     1.1%
+2026-08-05 03:05:51,431  INFO           BFSI              0     27.80           0     0.0%
+2026-08-05 03:05:51,431  INFO           TOTAL                              27,609
+2026-08-05 03:05:51,437  INFO        🚫 DISCARDED — under both moving averages, still falling:
+2026-08-05 03:05:51,437  INFO           MON100       Rs.316.35 under both its 50-day avg Rs.328.20 and 14-day avg Rs.322.46 — still falling
+2026-08-05 03:05:51,437  INFO        📉 CHEAPNESS — each ETF vs its OWN history, higher = cheaper
+2026-08-05 03:05:51,438  INFO           #  ETF           Score  in own range  dip now  dip vs own       trend
+2026-08-05 03:05:51,438  INFO           1  MOMIDMTM       38.7           89%     4.2%         66%        >50D
+2026-08-05 03:05:51,438  INFO           2  BFSI           37.1           58%     1.1%         32%        >50D
+2026-08-05 03:05:51,438  INFO           3  MODEFENCE      30.1           91%     3.7%         51%        >50D
+2026-08-05 03:05:51,438  INFO           4  INFRAIETF      17.6           76%     0.3%         11%        >50D
+2026-08-05 03:05:51,438  INFO           5  MAKEINDIA       6.5           99%     0.2%         12%        >50D
+2026-08-05 03:05:51,438  INFO           6  ALPHA           0.0          100%     0.0%          0%        >50D
+2026-08-05 03:05:51,438  INFO           in own range = price position in its 1-yr range (low = cheap)
+2026-08-05 03:05:51,438  INFO           dip vs own   = how unusual today's dip is for it (high = cheap)
+2026-08-05 03:05:51,438  INFO           trend        = which test kept it in (>50D or >14D)
+2026-08-05 03:05:51,438  INFO      ------------------------------------------------------------------------
+2026-08-05 03:05:51,438  INFO        👉 BUY        : Motilal Oswal Nifty Midcap 150 Momentum 50 ETF (MOMIDMTM)
+2026-08-05 03:05:51,438  INFO        Cheapness    : 38.7/100 — 4.2% off its 50-day high, deeper than 66% of its own dips, sitting at the 89th percentile of its 1-year range
+2026-08-05 03:05:51,438  INFO        Trend        : Rs.64.22 above its 50-day avg Rs.63.73
+2026-08-05 03:05:51,438  INFO        Portfolio    : currently 10.5% of your holdings (cap 40%)
+2026-08-05 03:05:51,438  INFO        Live price   : Rs.64.22
+2026-08-05 03:05:51,438  INFO        Suggested    : 38 units @ LIMIT Rs.64.35 = Rs.2,445.30  (price +0.20%)
+2026-08-05 03:05:51,438  INFO        Left unspent : Rs.54.70
+2026-08-05 03:05:51,438  INFO      ------------------------------------------------------------------------
+2026-08-05 03:05:51,438  INFO        Place this yourself in the Groww app — confirm the live price there first.
+2026-08-05 03:05:51,438  INFO        After it fills, set UNITS['MOMIDMTM'] = 83 in portfolio.py
