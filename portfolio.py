@@ -4,7 +4,7 @@ portfolio.py — WHAT YOU OWN, AND HOW MUCH YOU INVEST
 Three things you maintain by hand. Nothing else in the system needs editing.
 
   UNITS           how many units of each ETF you hold
-  WEEKLY_BUDGET   rupees to invest per calendar week
+  BUDGET          rupees to spend per run
   MAX_WEIGHT_PCT  concentration cap — see below
 
 UNITS drives two things in main.py:
@@ -42,10 +42,10 @@ UNITS = {
     "SILVERBEES": 20,
 }
 
-# Rupees to invest per calendar week. main.py spends at most this much, and
-# never more than the cash actually settled in the account.
-# Unspent budget does NOT roll over to next week.
-WEEKLY_BUDGET = 2500.0
+# Rupees to spend each time you run main.py, capped by the cash actually
+# settled in your account. Nothing tracks how often you run it — run it twice
+# and it spends this twice.
+BUDGET = 2500.0
 
 # Skip any ETF already above this share of portfolio value.
 # With 7 watchlist ETFs, equal weight would be ~14%; 40% leaves room to let

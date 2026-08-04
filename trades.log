@@ -430,3 +430,27 @@
 2026-08-05 01:33:31,048  INFO        Weekly ETF Buy  |  2026-08-05 01:33:31 IST  |  2026-W32
 2026-08-05 01:33:31,048  INFO      ========================================================================
 2026-08-05 01:33:31,048  INFO        🛑 NOT TRADING. Outside market hours — NSE cash trades 09:15-15:30 IST, it is now 01:33 IST.
+2026-08-05 01:37:01,682  INFO      ========================================================================
+2026-08-05 01:37:01,682  INFO        Weekly ETF Buy  |  2026-08-05 01:37:01 IST  |  2026-W32
+2026-08-05 01:37:01,682  INFO      ========================================================================
+2026-08-05 01:37:02,465  INFO        💰 Weekly budget Rs.2,500.00 | Clear cash Rs.526.55 | Spendable Rs.526.55
+2026-08-05 01:37:02,636  ERROR       🔴 FATAL: this API key is not entitled to market data (HTTP 403: Access forbidden for this request.)
+2026-08-05 01:37:02,636  ERROR          Orders/holdings still work, but quotes and historical candles are blocked.
+2026-08-05 01:37:02,636  ERROR          Enable the market-data (Live Data) add-on for this key and check the
+2026-08-05 01:37:02,636  ERROR          IP allowlist in the Groww API dashboard. Aborting — no order placed.
+2026-08-05 01:43:50,874  INFO      ========================================================================
+2026-08-05 01:43:50,874  INFO        ETF Buy  |  2026-08-05 01:43:50 IST
+2026-08-05 01:43:50,874  INFO      ========================================================================
+2026-08-05 01:43:51,432  INFO        💰 Budget Rs.2,500.00 | Cash Rs.526.55 | Spending up to Rs.526.55
+2026-08-05 01:43:51,592  ERROR       🔴 This API key is not entitled to market data (HTTP 403: Access forbidden for this request.)
+2026-08-05 01:43:51,593  ERROR          Orders and holdings work, but quotes and candles are blocked.
+2026-08-05 01:43:51,593  ERROR          Enable the market-data add-on for this key and check the IP
+2026-08-05 01:43:51,593  ERROR          allowlist in the Groww API dashboard. No order placed.
+2026-08-05 01:45:45,967  INFO      ========================================================================
+2026-08-05 01:45:45,967  INFO        ETF Buy  |  2026-08-05 01:45:45 IST
+2026-08-05 01:45:45,968  INFO      ========================================================================
+2026-08-05 01:45:46,722  INFO        💰 Budget Rs.2,500.00 | Cash Rs.526.55 | Spending up to Rs.526.55
+2026-08-05 01:45:46,873  ERROR       🔴 This API key is not entitled to market data (HTTP 403: Access forbidden for this request.)
+2026-08-05 01:45:46,873  ERROR          Orders and holdings work, but quotes and candles are blocked.
+2026-08-05 01:45:46,873  ERROR          Enable the market-data add-on for this key and check the IP
+2026-08-05 01:45:46,873  ERROR          allowlist in the Groww API dashboard. No order placed.

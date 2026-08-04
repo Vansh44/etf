@@ -1,30 +1,22 @@
 #!/usr/bin/env python3
 """
-main.py — WEEKLY ETF BUY BOT
-===========================
-Run once a week, any trading day. Places at most ONE limit buy per calendar
-week, then reports whether it actually filled.
+main.py — ETF BUY HELPER
+=======================
+Run it, it buys one ETF from your watchlist.
 
-WHAT IT DOES
+  1. Scores every watchlist ETF on RSI(3) from its own daily candles.
+  2. Prefers ETFs in an uptrend (price above their 100-day average) and picks
+     the most oversold of those — lowest RSI. If none are in an uptrend, it
+     ranks the whole watchlist the same way.
+  3. Skips anything already over MAX_WEIGHT_PCT of your portfolio or too
+     expensive for BUDGET, and buys the first candidate that passes.
+  4. Confirms the fill and prints the new unit count for portfolio.py.
 
-  1. Refuses to run when the market is shut (weekend, NSE holiday, outside
-     09:15-15:30 IST) or when this calendar week's buy is already done.
-  2. Scores every watchlist ETF on RSI(3) from its own daily candles.
-  3. Prefers ETFs in an uptrend — price above their 100-day average — and
-     picks the most oversold of those (lowest RSI). If nothing is in an
-     uptrend, it falls back to ranking the whole watchlist the same way.
-  4. Walks that ranking, skipping anything already over MAX_WEIGHT_PCT of the
-     portfolio or too expensive for the weekly budget, and buys the first
-     candidate that passes both.
-  5. Confirms the fill and logs the new unit count to put in portfolio.py.
+No calendar, no clock, no run tracking. It does exactly the above every time
+you run it — run it twice and it buys twice.
 
-WHAT YOU EDIT
-  portfolio.py   units you own, weekly budget, concentration cap
-  watchlist.py   which ETFs are allowed to be bought
-  holidays.py    NSE holidays, one year at a time
-
-ONE BUY PER WEEK is tracked in weekly_state.json next to this file. Delete
-that file and the current week opens up again.
+  watchlist.py   the ETFs you're interested in
+  portfolio.py   units you own, budget, concentration cap
 
 SETUP
   pip install growwapi pandas pyotp python-dotenv
@@ -32,7 +24,6 @@ SETUP
   python main.py
 """
 
-import json
 import logging
 import datetime
 import pyotp
@@ -40,7 +31,6 @@ import pandas as pd
 from growwapi import GrowwAPI
 from growwapi.groww.exceptions import GrowwAPIAuthorisationException
 import os
-from holidays import NSE_MARKET_HOLIDAYS
 from watchlist import ETF_WATCHLIST
 import portfolio
 import time
@@ -59,19 +49,12 @@ NSE_TICK         = 0.01    # NSE cash-segment tick size
 MIN_CANDLES      = 100     # the 100-day average needs at least this many
 HISTORY_DAYS     = 300     # calendar days of history to request (~205 sessions)
 
-IST          = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
-MARKET_OPEN  = datetime.time(9, 15)
-MARKET_CLOSE = datetime.time(15, 30)
+IST      = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_FILE = os.path.join(BASE_DIR, "trades.log")
 
-BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-LOG_FILE   = os.path.join(BASE_DIR, "trades.log")
-STATE_FILE = os.path.join(BASE_DIR, "weekly_state.json")
-
-# Groww's exact status vocabulary is not documented in the SDK, so classify
-# generously and default to caution: anything not clearly a failure is treated
-# as "this week is spoken for" rather than risk buying twice.
+# Groww's status vocabulary isn't documented in the SDK, so match generously.
 FILLED_STATUSES = {"EXECUTED", "COMPLETE", "COMPLETED", "FILLED"}
-FAILED_STATUSES = {"REJECTED", "CANCELLED", "CANCELED", "FAILED", "EXPIRED", "LAPSED"}
 
 # ─────────────────────────────────────────────
 #  LOGGING
@@ -91,22 +74,14 @@ class MarketDataForbidden(Exception):
     """
     The API key authenticates but is not entitled to market data (HTTP 403).
 
-    Orders, holdings and margin keep working while quotes and historical
-    candles are blocked, so this aborts the whole run instead of looking like
-    one failure per symbol.
+    Orders, holdings and margin keep working while quotes and candles are
+    blocked, so this aborts the run once instead of once per symbol.
     """
 
 
 def _is_forbidden(exc: Exception) -> bool:
     return (isinstance(exc, GrowwAPIAuthorisationException)
             or str(getattr(exc, "code", "")) == "403")
-
-
-def _log_forbidden(exc: Exception) -> None:
-    log.error(f"  🔴 FATAL: this API key is not entitled to market data (HTTP 403: {exc})")
-    log.error("     Orders/holdings still work, but quotes and historical candles are blocked.")
-    log.error("     Enable the market-data (Live Data) add-on for this key and check the")
-    log.error("     IP allowlist in the Groww API dashboard. Aborting — no order placed.")
 
 # ─────────────────────────────────────────────
 #  AUTHENTICATION
@@ -125,115 +100,13 @@ def get_groww_client() -> GrowwAPI:
     return GrowwAPI(access_token)
 
 # ─────────────────────────────────────────────
-#  ONE BUY PER CALENDAR WEEK
-# ─────────────────────────────────────────────
-def current_week(now: datetime.datetime) -> str:
-    """ISO week label, e.g. '2026-W32'. Weeks run Monday to Sunday."""
-    year, week, _ = now.isocalendar()
-    return f"{year}-W{week:02d}"
-
-
-def load_state() -> dict:
-    try:
-        with open(STATE_FILE, encoding="utf-8") as fh:
-            return json.load(fh) or {}
-    except FileNotFoundError:
-        return {}
-    except (json.JSONDecodeError, OSError) as e:
-        log.warning(f"  ⚠ Could not read {os.path.basename(STATE_FILE)}: {e}. "
-                    f"Treating this week as open.")
-        return {}
-
-
-def save_state(state: dict) -> None:
-    try:
-        with open(STATE_FILE, "w", encoding="utf-8") as fh:
-            json.dump(state, fh, indent=2)
-    except OSError as e:
-        log.error(f"  🔴 Could not write {os.path.basename(STATE_FILE)}: {e}. "
-                  f"Next run may buy again this week!")
-
-
-def week_already_spent(groww: GrowwAPI, state: dict, week: str):
-    """
-    Returns (spent, note).
-
-    spent=True  -> this week's buy is done or still working; do not buy again.
-    spent=False -> the week is open. note explains a retry when there was a
-                   failed attempt earlier in the same week.
-    """
-    if not state or state.get("iso_week") != week:
-        return False, ""
-
-    label    = f"{state.get('symbol', '?')} on {state.get('date', '?')}"
-    order_id = state.get("order_id")
-    status   = str(state.get("status", "")).upper()
-    filled   = state.get("filled_quantity")
-
-    # The recorded status is a snapshot from placement time. Re-check it: an
-    # order that was merely accepted then may have filled or expired since.
-    if order_id and order_id != "N/A":
-        try:
-            detail = groww.get_order_status(
-                segment=groww.SEGMENT_CASH,
-                groww_order_id=order_id,
-            ) or {}
-            status = str(detail.get("order_status", status)).upper()
-            filled = detail.get("filled_quantity", filled)
-        except Exception as e:
-            log.warning(f"  ⚠ Could not re-check order {order_id}: {e}")
-
-    try:
-        filled_qty = float(filled or 0)
-    except (TypeError, ValueError):
-        filled_qty = 0.0
-
-    if filled_qty > 0 or status in FILLED_STATUSES:
-        return True, f"bought {label}, filled {filled_qty:g}"
-    if status in FAILED_STATUSES:
-        return False, (f"earlier attempt this week ({label}) ended {status} "
-                       f"without filling — trying again")
-    return True, f"this week's order for {label} is {status or 'UNKNOWN'}"
-
-# ─────────────────────────────────────────────
-#  MARKET CALENDAR & CLOCK
-# ─────────────────────────────────────────────
-def market_closed_reason(now: datetime.datetime):
-    """
-    Returns a reason string if we must not trade right now, else None.
-
-    Refuses outright when holidays.py has no entry for the current year — a
-    stale calendar would otherwise pass silently on every holiday.
-    """
-    today = now.date()
-
-    if today.weekday() >= 5:
-        return "Weekend."
-
-    covered_years = sorted({d[:4] for d in NSE_MARKET_HOLIDAYS})
-    if str(today.year) not in covered_years:
-        return (f"holidays.py has no {today.year} dates (it covers "
-                f"{', '.join(covered_years)}). Refusing to trade against a "
-                f"stale calendar — add this year's NSE holidays.")
-
-    if today.strftime("%Y-%m-%d") in NSE_MARKET_HOLIDAYS:
-        return "Public holiday."
-
-    if not (MARKET_OPEN <= now.time() <= MARKET_CLOSE):
-        return (f"Outside market hours — NSE cash trades "
-                f"{MARKET_OPEN:%H:%M}-{MARKET_CLOSE:%H:%M} IST, it is now "
-                f"{now:%H:%M} IST.")
-
-    return None
-
-# ─────────────────────────────────────────────
 #  MARKET DATA
 # ─────────────────────────────────────────────
 def get_live_price(groww: GrowwAPI, symbol: str) -> float:
     """
-    Live LTP for symbol, or 0.0 if unavailable.
+    Live LTP for symbol, 0.0 if unavailable.
 
-    The limit price must come from here, not from the last daily candle: a buy
+    The limit price comes from here, not from the last daily candle: a buy
     limit pinned to a stale close sits below the market and never fills.
     """
     try:
@@ -259,7 +132,7 @@ def get_live_price(groww: GrowwAPI, symbol: str) -> float:
 
 
 def fetch_prices(groww: GrowwAPI, symbols) -> dict:
-    """Live price for each symbol. Needed for both sizing and portfolio weights."""
+    """Live price per symbol — used for both order sizing and portfolio weights."""
     return {sym: get_live_price(groww, sym) for sym in symbols}
 
 
@@ -313,14 +186,14 @@ def get_historical_dataframe(groww: GrowwAPI, symbol: str) -> pd.DataFrame:
 # ─────────────────────────────────────────────
 def portfolio_snapshot(prices: dict):
     """
-    Returns (total_value, rows) where each row carries units, price, value and
-    weight. Every symbol in portfolio.UNITS counts toward the total, including
-    ones off the watchlist — otherwise weights would be overstated.
+    Returns (total_value, rows) with units, price, value and weight per symbol.
+
+    Everything in portfolio.UNITS counts toward the total, including holdings
+    off the watchlist — leaving them out would overstate every other weight.
+    Watchlist ETFs you don't own yet show up at 0 so the table is complete.
     """
     rows  = []
     total = 0.0
-    # Union so the table always shows the full picture: everything you hold,
-    # plus watchlist ETFs you don't own yet (0 units, 0% weight, still buyable).
     for symbol in sorted(set(portfolio.UNITS) | set(ETF_WATCHLIST)):
         units = int(portfolio.UNITS.get(symbol, 0) or 0)
         price = float(prices.get(symbol, 0.0) or 0.0)
@@ -346,14 +219,14 @@ def log_portfolio(rows: list, total: float) -> None:
     log.info(f"     {'TOTAL':<12}{'':>7}{'':>10}{total:>12,.0f}")
 
 # ─────────────────────────────────────────────
-#  ORDER SIZING & SELECTION
+#  SIZING & SELECTION
 # ─────────────────────────────────────────────
 def size_order(live_price: float, budget: float):
     """
     Returns (qty, limit_price, cost) for a buy that stays inside budget.
 
-    qty is 0 when a single unit busts the budget — the caller must then move on
-    rather than buying one unit anyway.
+    qty is 0 when one unit busts the budget, so the caller moves on instead of
+    buying a unit it can't afford.
     """
     raw   = live_price * (1 + LIMIT_BUFFER_PCT / 100)
     limit = round(round(raw / NSE_TICK) * NSE_TICK, 2)
@@ -363,13 +236,50 @@ def size_order(live_price: float, budget: float):
     return qty, limit, round(qty * limit, 2)
 
 
+def scan_watchlist(groww: GrowwAPI):
+    """Returns (ranked, regime). ranked is empty when nothing could be scored."""
+    valid_targets = []
+    all_targets   = []
+
+    for symbol, name in ETF_WATCHLIST.items():
+        df = get_historical_dataframe(groww, symbol)
+        if df.empty or pd.isna(df['RSI_3'].iloc[-1]):
+            continue
+
+        latest = df.iloc[-1]
+        log.info(f"  📊 {symbol:<12} | P: Rs.{latest['close']:>8.2f} "
+                 f"| 50DMA: {latest['50_DMA']:>8.2f} | 100DMA: {latest['100_DMA']:>8.2f} "
+                 f"| RSI: {latest['RSI_3']:>5.2f} | Day: {latest['daily_return']:>5.2f}%")
+
+        etf_data = {
+            "symbol": symbol,
+            "name":   name,
+            "price":  latest['close'],
+            "rsi":    latest['RSI_3'],
+        }
+        all_targets.append(etf_data)
+
+        if latest['close'] > latest['100_DMA']:
+            valid_targets.append(etf_data)
+
+    if not all_targets:
+        return [], ""
+
+    if valid_targets:
+        log.info("  📈 Uptrend regime — ranking ETFs above their 100-day average.")
+        return sorted(valid_targets, key=lambda x: x['rsi']), "Uptrend"
+
+    log.info("  🐻 Bear regime — nothing above its 100-day average, ranking the whole pool.")
+    return sorted(all_targets, key=lambda x: x['rsi']), "Bear market"
+
+
 def pick_candidate(ranked: list, prices: dict, weights: dict, budget: float):
     """
-    Walk the ranking best-first and return the first candidate that clears both
-    the concentration cap and the weekly budget. None if nothing qualifies.
+    Walk the ranking best-first, return the first candidate that clears the
+    concentration cap and the budget. None if nothing qualifies.
 
-    The cap is tested on CURRENT weight, not post-buy weight: an ETF is skipped
-    only once it has already grown past MAX_WEIGHT_PCT.
+    The cap tests CURRENT weight: an ETF is skipped once it has already grown
+    past MAX_WEIGHT_PCT.
     """
     for candidate in ranked:
         symbol = candidate["symbol"]
@@ -388,7 +298,7 @@ def pick_candidate(ranked: list, prices: dict, weights: dict, budget: float):
         qty, limit_price, cost = size_order(live, budget)
         if qty < 1:
             log.info(f"  ⏭  {symbol} skipped: one unit costs Rs.{limit_price:.2f}, "
-                     f"over the Rs.{budget:.2f} weekly budget.")
+                     f"over the Rs.{budget:.2f} budget.")
             continue
 
         return {**candidate, "live": live, "qty": qty,
@@ -396,63 +306,13 @@ def pick_candidate(ranked: list, prices: dict, weights: dict, budget: float):
     return None
 
 # ─────────────────────────────────────────────
-#  STRATEGY
+#  MAIN
 # ─────────────────────────────────────────────
-def scan_watchlist(groww: GrowwAPI):
-    """Returns (ranked, regime). ranked is empty when nothing could be scored."""
-    valid_targets = []
-    all_targets   = []
-
-    for symbol, name in ETF_WATCHLIST.items():
-        df = get_historical_dataframe(groww, symbol)
-        if df.empty or pd.isna(df['RSI_3'].iloc[-1]):
-            continue
-
-        latest        = df.iloc[-1]
-        current_price = latest['close']
-        dma_50        = latest['50_DMA']
-        dma_100       = latest['100_DMA']
-        rsi_3         = latest['RSI_3']
-        daily_return  = latest['daily_return']
-
-        log.info(f"  📊 {symbol:<12} | P: Rs.{current_price:>8.2f} | 50DMA: {dma_50:>8.2f} "
-                 f"| 100DMA: {dma_100:>8.2f} | RSI: {rsi_3:>5.2f} | Day: {daily_return:>5.2f}%")
-
-        etf_data = {
-            "symbol":       symbol,
-            "name":         name,
-            "price":        current_price,
-            "rsi":          rsi_3,
-            "daily_return": daily_return,
-        }
-        all_targets.append(etf_data)
-
-        if current_price > dma_100:
-            valid_targets.append(etf_data)
-
-    if not all_targets:
-        return [], ""
-
-    if valid_targets:
-        log.info("  📈 Uptrend regime — ranking ETFs trading above their 100-day average.")
-        return sorted(valid_targets, key=lambda x: x['rsi']), "Uptrend"
-
-    log.info("  🐻 Bear regime — nothing above its 100-day average, ranking the whole pool.")
-    return sorted(all_targets, key=lambda x: x['rsi']), "Bear market"
-
-
 def run_strategy() -> None:
-    now  = datetime.datetime.now(IST)
-    week = current_week(now)
-
+    now = datetime.datetime.now(IST)
     log.info("=" * 72)
-    log.info(f"  Weekly ETF Buy  |  {now:%Y-%m-%d %H:%M:%S} IST  |  {week}")
+    log.info(f"  ETF Buy  |  {now:%Y-%m-%d %H:%M:%S} IST")
     log.info("=" * 72)
-
-    closed = market_closed_reason(now)
-    if closed:
-        log.info(f"  🛑 NOT TRADING. {closed}")
-        return
 
     try:
         groww = get_groww_client()
@@ -460,15 +320,6 @@ def run_strategy() -> None:
         log.error(f"  🔴 Authentication failed: {e}")
         return
 
-    # ── one buy per calendar week ──
-    spent, note = week_already_spent(groww, load_state(), week)
-    if spent:
-        log.info(f"  🛑 ALREADY INVESTED IN {week} — {note}. Nothing to do.")
-        return
-    if note:
-        log.info(f"  ↻ {note}.")
-
-    # ── budget: the weekly figure, capped by cash actually settled ──
     try:
         margin     = groww.get_available_margin_details() or {}
         clear_cash = float(margin.get("clear_cash", 0.0) or 0.0)
@@ -476,11 +327,11 @@ def run_strategy() -> None:
         log.error(f"  🔴 Could not read available margin: {e}")
         return
 
-    budget = min(float(portfolio.WEEKLY_BUDGET), clear_cash)
-    log.info(f"  💰 Weekly budget Rs.{portfolio.WEEKLY_BUDGET:,.2f} | "
-             f"Clear cash Rs.{clear_cash:,.2f} | Spendable Rs.{budget:,.2f}")
+    budget = min(float(portfolio.BUDGET), clear_cash)
+    log.info(f"  💰 Budget Rs.{portfolio.BUDGET:,.2f} | Cash Rs.{clear_cash:,.2f} "
+             f"| Spending up to Rs.{budget:,.2f}")
     if budget < NSE_TICK:
-        log.error("  🔴 No spendable cash in the account. Nothing to do.")
+        log.error("  🔴 No cash available. Nothing to do.")
         return
 
     try:
@@ -489,7 +340,6 @@ def run_strategy() -> None:
             log.error("  🔴 No watchlist ETF had usable history. Check the symbols.")
             return
 
-        # Price every held symbol too, so portfolio weights are honest.
         prices = fetch_prices(groww, sorted(set(ETF_WATCHLIST) | set(portfolio.UNITS)))
         total, rows = portfolio_snapshot(prices)
         log_portfolio(rows, total)
@@ -498,13 +348,15 @@ def run_strategy() -> None:
         pick = pick_candidate(ranked, prices, weights, budget)
 
     except MarketDataForbidden as e:
-        _log_forbidden(e)
+        log.error(f"  🔴 This API key is not entitled to market data (HTTP 403: {e})")
+        log.error("     Orders and holdings work, but quotes and candles are blocked.")
+        log.error("     Enable the market-data add-on for this key and check the IP")
+        log.error("     allowlist in the Groww API dashboard. No order placed.")
         return
 
     if pick is None:
-        log.error(f"  🔴 Nothing qualified this week — every candidate was over the "
-                  f"{portfolio.MAX_WEIGHT_PCT:.0f}% cap or over Rs.{budget:,.2f}. "
-                  f"No order placed.")
+        log.error(f"  🔴 Nothing qualified — every candidate was over the "
+                  f"{portfolio.MAX_WEIGHT_PCT:.0f}% cap or over Rs.{budget:,.2f}.")
         return
 
     qty, limit_price, total_cost = pick['qty'], pick['limit_price'], pick['cost']
@@ -538,23 +390,10 @@ def run_strategy() -> None:
 
     order_id = order_response.get('groww_order_id', 'N/A')
     status   = order_response.get('order_status', 'UNKNOWN')
-    log.info(f"  📨 Order ACCEPTED by Groww. ID: {order_id} | Status: {status} | Regime: {regime}")
+    log.info(f"  📨 Order accepted. ID: {order_id} | Status: {status}")
 
-    # Record the week immediately — before the fill check — so a crash here
-    # cannot lead to a second buy in the same week.
-    state = {
-        "iso_week":    week,
-        "date":        f"{now:%Y-%m-%d}",
-        "symbol":      pick['symbol'],
-        "qty":         qty,
-        "limit_price": limit_price,
-        "order_id":    order_id,
-        "status":      status,
-    }
-    save_state(state)
-
-    # Acceptance is not execution. A DAY-validity limit order that never trades
-    # simply expires at close, so confirm what actually happened.
+    # Acceptance is not execution. A DAY limit order that never trades expires
+    # at the close, so confirm what actually happened.
     final_status, filled = status, None
     if order_id != 'N/A':
         time.sleep(3)
@@ -568,21 +407,15 @@ def run_strategy() -> None:
         except Exception as e:
             log.warning(f"  ⚠ Could not confirm order status: {e}")
 
-    state["status"] = final_status
-    state["filled_quantity"] = filled
-    save_state(state)
-
     if str(final_status).upper() in FILLED_STATUSES or (filled and float(filled) > 0):
         bought = int(float(filled)) if filled else qty
         log.info(f"  ✅ FILLED: {bought} units of {pick['symbol']} @ ~Rs.{limit_price:,.2f}")
         log.info(f"  ✏️  Update portfolio.py: UNITS['{pick['symbol']}'] = "
                  f"{int(portfolio.UNITS.get(pick['symbol'], 0) or 0) + bought}")
     else:
-        log.warning(f"  ⏳ NOT FILLED YET — status: {final_status}"
+        log.warning(f"  ⏳ Not filled yet — status: {final_status}"
                     f"{f', filled {filled}/{qty}' if filled is not None else ''}. "
-                    f"A DAY limit order that never trades expires at "
-                    f"{MARKET_CLOSE:%H:%M} IST.")
-        log.warning(f"     If it expires unfilled, re-running this week will try again. "
+                    f"A DAY limit order that never trades expires at the close. "
                     f"Only update portfolio.py once it actually fills.")
 
 
