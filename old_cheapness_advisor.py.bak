@@ -1,0 +1,414 @@
+# #!/usr/bin/env python3
+# """
+# main.py — ETF BUY ADVISOR (cheapest-first)
+# ==========================================
+# Ranks every enabled ETF from cheapest to priciest and tells you which one to
+# buy. It does not place orders.
+
+# THE RULE
+#   1. Score every ETF on CHEAPNESS (0-100, higher = cheaper)
+#   2. Rank 1 = cheapest
+#   3. If rank 1 is already more than MAX_WEIGHT_PCT of your portfolio,
+#      skip it and go to rank 2. Keep walking down until one passes.
+
+# HOW CHEAPNESS IS MEASURED
+#   Each ETF is scored against ITS OWN history, never against the other ETFs.
+#   That matters: small-caps and Nasdaq routinely sit 6-10% below a recent
+#   high while Nifty 50 and gold rarely do, so ranking on raw drawdown would
+#   just pick the most volatile ETF every single week.
+
+#   Two components, both percentile ranks, both 0-100:
+
+#     A. PRICE POSITION - where does the live price sit inside its own
+#        trailing 1-year range of closes? 0 = at its 52-week low.
+#        Cheapness contribution = 100 - price_percentile
+
+#     B. DIP UNUSUALNESS - today's drawdown from its 50-day high, ranked
+#        against its own past year of drawdowns. 90 means "this dip is
+#        deeper than 90% of the dips this ETF normally has."
+#        Cheapness contribution = drawdown_percentile
+
+#     cheapness = (A + B) / 2
+
+#   A score of 75 means the same thing for gold as it does for small-caps.
+#   No weights to tune, no assumption that returns are normally distributed.
+
+# SETUP
+#   pip install growwapi pandas pyotp python-dotenv
+#   export GROWW_TOTP_TOKEN="..."     # your API key / approval token
+#   export GROWW_TOTP_SECRET="..."    # your TOTP secret
+#   python main.py
+# """
+
+# import os
+# import sys
+# import time
+# import datetime
+
+# import pyotp
+# import pandas as pd
+# from dotenv import load_dotenv
+# from growwapi import GrowwAPI
+
+# import etfs
+# import portfolio
+
+# load_dotenv()
+
+# # ─────────────────────────────────────────────────────────────────────
+# #  SETTINGS
+# # ─────────────────────────────────────────────────────────────────────
+# MAX_WEIGHT_PCT = 40.0     # skip rank 1 if it is already this % of portfolio
+# PRICE_WINDOW = 252        # trailing sessions for the price-position percentile
+# HIGH_LOOKBACK = 50        # sessions for the "recent high" used in drawdown
+# MIN_CANDLES = 60          # below this, an ETF cannot be scored
+# MAX_PREMIUM_PCT = 1.5     # skip an international ETF this far above iNAV
+# LIMIT_BUFFER = 1.002      # suggested limit price = LTP + 0.2%
+# IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+
+# TOTP_TOKEN = os.getenv("GROWW_TOTP_TOKEN")
+# TOTP_SECRET = os.getenv("GROWW_TOTP_SECRET")
+
+# C_RESET, C_BOLD, C_DIM = "\033[0m", "\033[1m", "\033[2m"
+# C_GREEN, C_YELLOW, C_RED, C_CYAN = "\033[32m", "\033[33m", "\033[31m", "\033[36m"
+
+
+# def hr(ch="─", n=78):
+#     print(ch * n)
+
+
+# # ─────────────────────────────────────────────────────────────────────
+# #  AUTH
+# # ─────────────────────────────────────────────────────────────────────
+# def fix_totp_secret(secret: str) -> str:
+#     secret = secret.strip().upper().replace(" ", "")
+#     pad = len(secret) % 8
+#     return secret + ("=" * (8 - pad)) if pad else secret
+
+
+# def connect() -> GrowwAPI:
+#     if not TOTP_TOKEN or not TOTP_SECRET:
+#         sys.exit("ERROR: set GROWW_TOTP_TOKEN and GROWW_TOTP_SECRET "
+#                  "as environment variables (or in a .env file).")
+#     totp = pyotp.TOTP(fix_totp_secret(TOTP_SECRET)).now()
+#     token = GrowwAPI.get_access_token(api_key=TOTP_TOKEN, totp=totp)
+#     return GrowwAPI(token)
+
+
+# # ─────────────────────────────────────────────────────────────────────
+# #  MARKET DATA  (SDK method names vary between versions, so each call
+# #  tries the documented name first and falls back gracefully)
+# # ─────────────────────────────────────────────────────────────────────
+# def _first_num(d: dict, keys) -> float:
+#     for k in keys:
+#         v = d.get(k)
+#         if v not in (None, "", 0, "0"):
+#             try:
+#                 return float(v)
+#             except (TypeError, ValueError):
+#                 continue
+#     return 0.0
+
+
+# def fetch_quote(groww: GrowwAPI, symbol: str) -> dict:
+#     """Returns {'ltp': float, 'inav': float}. ltp of 0.0 means the fetch failed."""
+#     try:
+#         q = groww.get_quote(
+#             exchange=groww.EXCHANGE_NSE,
+#             segment=groww.SEGMENT_CASH,
+#             trading_symbol=symbol,
+#         ) or {}
+#         return {
+#             "ltp": _first_num(q, ("last_price", "ltp", "close", "last_traded_price")),
+#             "inav": _first_num(q, ("inav", "indicated_nav", "i_nav", "nav")),
+#         }
+#     except Exception as e:
+#         print(f"  {C_RED}!{C_RESET} quote failed for {symbol}: {e}")
+#         return {"ltp": 0.0, "inav": 0.0}
+
+
+# def fetch_closes(groww: GrowwAPI, symbol: str) -> list:
+#     """Daily closing prices, oldest first. Empty list if unavailable."""
+#     end = datetime.datetime.now(IST)
+#     start = end - datetime.timedelta(days=550)   # ~2 years of calendar days
+#     fmt = "%Y-%m-%d %H:%M:%S"
+#     day = getattr(groww, "CANDLE_INTERVAL_DAY", 1440)
+
+#     attempts = [
+#         ("get_historical_candles", {
+#             "exchange": groww.EXCHANGE_NSE, "segment": groww.SEGMENT_CASH,
+#             "groww_symbol": f"NSE-{symbol}",
+#             "start_time": start.strftime(fmt), "end_time": end.strftime(fmt),
+#             "candle_interval": day,
+#         }),
+#         ("get_historical_candle_data", {
+#             "exchange": groww.EXCHANGE_NSE, "segment": groww.SEGMENT_CASH,
+#             "trading_symbol": symbol,
+#             "start_time": start.strftime(fmt), "end_time": end.strftime(fmt),
+#             "interval_in_minutes": 1440,
+#         }),
+#     ]
+#     for name, kwargs in attempts:
+#         fn = getattr(groww, name, None)
+#         if not callable(fn):
+#             continue
+#         try:
+#             resp = fn(**kwargs) or {}
+#             candles = resp.get("candles") if isinstance(resp, dict) else resp
+#             if not candles:
+#                 continue
+#             # candle layout: [timestamp, open, high, low, close, volume]
+#             closes = [float(c[4]) for c in candles if len(c) >= 5 and c[4]]
+#             if closes:
+#                 return closes
+#         except Exception:
+#             continue
+#     return []
+
+
+# # ─────────────────────────────────────────────────────────────────────
+# #  CHEAPNESS SCORE
+# # ─────────────────────────────────────────────────────────────────────
+# def score_cheapness(closes: list, live_price: float) -> dict:
+#     """
+#     Percentile-based cheapness, 0-100. Higher = cheaper.
+#     Scored against the ETF's own history so asset classes are comparable.
+#     """
+#     n = len(closes)
+#     if n < MIN_CANDLES or live_price <= 0:
+#         return {"cheapness": None, "reason": f"only {n} candles (need {MIN_CANDLES})"}
+
+#     s = pd.Series(closes, dtype="float64")
+#     window = min(PRICE_WINDOW, n)
+#     look = min(HIGH_LOOKBACK, n)
+
+#     # ── A. Where does the live price sit in its own trailing range? ──
+#     recent = s.tail(window)
+#     price_pctile = float((recent < live_price).sum()) / len(recent) * 100
+
+#     # ── B. How unusual is today's dip for this ETF? ──
+#     recent_high = float(s.tail(look).max())
+#     recent_high = max(recent_high, live_price)          # live price can be the new high
+#     drawdown_now = (recent_high - live_price) / recent_high * 100 if recent_high else 0.0
+
+#     roll_high = s.rolling(look).max()
+#     dd_hist = ((roll_high - s) / roll_high * 100).dropna().tail(window)
+#     if len(dd_hist) >= 20:
+#         dd_pctile = float((dd_hist < drawdown_now).sum()) / len(dd_hist) * 100
+#     else:
+#         dd_pctile = 50.0                                 # neutral if no baseline
+
+#     cheapness = ((100.0 - price_pctile) + dd_pctile) / 2
+
+#     return {
+#         "cheapness": round(cheapness, 1),
+#         "price_pctile": round(price_pctile, 1),
+#         "dd_pctile": round(dd_pctile, 1),
+#         "drawdown": round(drawdown_now, 2),
+#         "recent_high": recent_high,
+#         "window": window,
+#         "reason": None,
+#     }
+
+
+# # ─────────────────────────────────────────────────────────────────────
+# #  BUILD SNAPSHOT
+# # ─────────────────────────────────────────────────────────────────────
+# def build_snapshot(groww: GrowwAPI):
+#     rows = []
+#     symbols = list(etfs.ETF_POOL.keys())
+#     print(f"  Fetching live prices and history for {len(symbols)} ETFs...")
+
+#     for sym in symbols:
+#         meta = etfs.ETF_POOL[sym]
+#         enabled = meta.get("enabled", True)
+#         q = fetch_quote(groww, sym)
+#         units = int(portfolio.UNITS.get(sym, 0) or 0)
+#         external = float(getattr(portfolio, "EXTERNAL_VALUE", {}).get(sym, 0.0) or 0.0)
+
+#         closes = fetch_closes(groww, sym) if enabled else []
+#         sc = score_cheapness(closes, q["ltp"]) if enabled else {"cheapness": None,
+#                                                                "reason": "disabled"}
+
+#         ltp = q["ltp"]
+#         premium = ((ltp - q["inav"]) / q["inav"] * 100) if (q["inav"] > 0 and ltp > 0) else None
+
+#         rows.append({
+#             "symbol": sym, "name": meta["name"], "sleeve": meta["sleeve"],
+#             "enabled": enabled, "international": meta["international"],
+#             "note": meta.get("note", ""),
+#             "units": units, "ltp": ltp, "inav": q["inav"], "premium": premium,
+#             "value": units * ltp + external, "external": external,
+#             **sc,
+#         })
+#         time.sleep(0.25)   # be gentle with the API
+
+#     total = sum(r["value"] for r in rows)
+#     for r in rows:
+#         r["weight"] = (r["value"] / total * 100) if total > 0 else 0.0
+
+#     return rows, total, float(portfolio.AMOUNT_TO_INVEST)
+
+
+# # ─────────────────────────────────────────────────────────────────────
+# #  OUTPUT
+# # ─────────────────────────────────────────────────────────────────────
+# def print_portfolio(rows: list, total: float):
+#     hr()
+#     print(f"{C_BOLD}  YOUR PORTFOLIO{C_RESET}")
+#     hr()
+#     print(f"  {'ETF':<11} {'Units':>6} {'Price':>10} {'Value':>11} {'Weight':>8}")
+#     hr("·")
+#     for r in sorted(rows, key=lambda x: -x["value"]):
+#         w = r["weight"]
+#         colour = C_RED if w > MAX_WEIGHT_PCT else (C_YELLOW if w > MAX_WEIGHT_PCT * 0.8
+#                                                   else C_RESET)
+#         price = f"{r['ltp']:,.2f}" if r["ltp"] > 0 else "n/a"
+#         flag = "" if r["enabled"] else f" {C_DIM}(paused){C_RESET}"
+#         print(f"  {r['symbol']:<11} {r['units']:>6} {price:>10} "
+#               f"{r['value']:>11,.0f} {colour}{w:>7.1f}%{C_RESET}{flag}")
+#     hr("·")
+#     print(f"  {C_BOLD}TOTAL Rs.{total:,.0f}{C_RESET}"
+#           f"{C_DIM}   concentration cap = {MAX_WEIGHT_PCT:.0f}%{C_RESET}")
+
+
+# def print_ranking(ranked: list):
+#     print()
+#     hr()
+#     print(f"{C_BOLD}  CHEAPNESS RANKING{C_RESET}   "
+#           f"{C_DIM}higher score = cheaper vs its own history{C_RESET}")
+#     hr()
+#     print(f"  {'#':<3} {'ETF':<11} {'Score':>6} {'InRange':>8} {'DipRank':>8} "
+#           f"{'Drawdown':>9} {'Weight':>8}")
+#     hr("·")
+#     for i, r in enumerate(ranked, 1):
+#         mark = f"{C_GREEN}{C_BOLD}" if i == 1 else ""
+#         over = f" {C_RED}>cap{C_RESET}" if r["weight"] > MAX_WEIGHT_PCT else ""
+#         print(f"  {mark}{i:<3} {r['symbol']:<11} {r['cheapness']:>6.1f}{C_RESET} "
+#               f"{r['price_pctile']:>7.0f}% {r['dd_pctile']:>7.0f}% "
+#               f"{r['drawdown']:>8.2f}% {r['weight']:>7.1f}%{over}")
+#     print(f"  {C_DIM}InRange = price position in its 1-yr range (low = cheap)")
+#     print(f"  DipRank = how unusual today's dip is for this ETF (high = cheap){C_RESET}")
+
+
+# def decide(ranked: list, budget: float):
+#     """Walk down the ranking until one ETF passes every check."""
+#     skipped = []
+#     for i, r in enumerate(ranked, 1):
+#         reasons = []
+#         if r["weight"] > MAX_WEIGHT_PCT:
+#             reasons.append(f"already {r['weight']:.1f}% of portfolio "
+#                            f"(cap {MAX_WEIGHT_PCT:.0f}%)")
+#         if r["ltp"] > budget:
+#             reasons.append(f"one unit costs Rs.{r['ltp']:,.2f}, over your "
+#                            f"Rs.{budget:,.0f} budget")
+#         if r["international"] and r["premium"] is not None \
+#                 and r["premium"] > MAX_PREMIUM_PCT:
+#             reasons.append(f"trading {r['premium']:+.1f}% above iNAV "
+#                            f"(cap {MAX_PREMIUM_PCT}%)")
+#         if reasons:
+#             skipped.append((i, r, reasons))
+#             continue
+#         return i, r, skipped
+#     return None, None, skipped
+
+
+# def print_decision(rank, pick, skipped, budget):
+#     print()
+#     hr()
+#     print(f"{C_BOLD}  DECISION{C_RESET}")
+#     hr()
+#     for i, r, reasons in skipped:
+#         print(f"  {C_YELLOW}Rank {i} {r['symbol']} skipped:{C_RESET} "
+#               f"{'; '.join(reasons)}")
+
+#     if not pick:
+#         print(f"  {C_RED}Nothing is buyable this round.{C_RESET} Raise "
+#               f"AMOUNT_TO_INVEST in portfolio.py, or wait for the "
+#               f"concentration/premium to ease.")
+#         return
+
+#     limit = round(pick["ltp"] * LIMIT_BUFFER, 2)
+#     qty = max(1, int(budget // limit))
+#     spend = qty * limit
+
+#     print()
+#     print(f"  {C_GREEN}{C_BOLD}>>> BUY {pick['symbol']}  (rank {rank}){C_RESET}  "
+#           f"{C_DIM}{pick['name']}{C_RESET}")
+#     print(f"      Sleeve      : {pick['sleeve']}")
+#     print(f"      Cheapness   : {pick['cheapness']:.1f}/100  "
+#           f"({pick['drawdown']:.2f}% off its {HIGH_LOOKBACK}-day high, "
+#           f"at the {pick['price_pctile']:.0f}th percentile of its "
+#           f"{pick['window']}-session range)")
+#     print(f"      Live price   : Rs.{pick['ltp']:,.2f}")
+#     if pick["inav"] > 0:
+#         print(f"      iNAV         : Rs.{pick['inav']:,.2f} "
+#               f"({pick['premium']:+.2f}% premium)")
+#     elif pick["international"]:
+#         print(f"      {C_YELLOW}iNAV not exposed by the API - check the premium "
+#               f"on nseindia.com before buying{C_RESET}")
+#     print(f"      {C_BOLD}Place a LIMIT order{C_RESET}: {qty} units "
+#           f"@ Rs.{limit:,.2f}  =  Rs.{spend:,.2f}")
+#     print(f"      Leftover     : Rs.{budget - spend:,.2f}")
+#     print()
+#     print(f"  {C_DIM}After buying, set UNITS['{pick['symbol']}'] = "
+#           f"{pick['units'] + qty} in portfolio.py{C_RESET}")
+#     if pick["note"]:
+#         print(f"  {C_DIM}Note: {pick['note']}{C_RESET}")
+
+
+# # ─────────────────────────────────────────────────────────────────────
+# #  MAIN
+# # ─────────────────────────────────────────────────────────────────────
+# def main():
+#     now = datetime.datetime.now(IST)
+#     hr("═")
+#     print(f"{C_BOLD}  ETF BUY ADVISOR — cheapest first{C_RESET}   "
+#           f"{now:%a %d %b %Y, %H:%M} IST")
+#     hr("═")
+
+#     problems = etfs.validate_pool()
+#     if problems:
+#         print(f"{C_RED}  Problems in etfs.py:{C_RESET}")
+#         for p in problems:
+#             print(f"    - {p}")
+#         sys.exit(1)
+
+#     unknown = set(portfolio.UNITS) - set(etfs.ETF_POOL)
+#     if unknown:
+#         print(f"  {C_YELLOW}!{C_RESET} In portfolio.py but not in etfs.py "
+#               f"(ignored): {', '.join(sorted(unknown))}")
+#     if portfolio.AMOUNT_TO_INVEST <= 0:
+#         sys.exit("  Set AMOUNT_TO_INVEST in portfolio.py to a positive number.")
+
+#     try:
+#         groww = connect()
+#     except Exception as e:
+#         sys.exit(f"  {C_RED}Auth failed:{C_RESET} {e}")
+
+#     rows, total, budget = build_snapshot(groww)
+#     print()
+#     print_portfolio(rows, total)
+#     print(f"  Investing this round: {C_BOLD}Rs.{budget:,.0f}{C_RESET}")
+
+#     scorable = [r for r in rows if r["cheapness"] is not None]
+#     unscorable = [r for r in rows if r["cheapness"] is None and r["enabled"]]
+#     for r in unscorable:
+#         print(f"  {C_YELLOW}!{C_RESET} {r['symbol']} not scored: {r['reason']}")
+
+#     if not scorable:
+#         sys.exit(f"  {C_RED}No ETF could be scored. Market may be closed, or "
+#                  f"your symbols/API methods need checking.{C_RESET}")
+
+#     ranked = sorted(scorable, key=lambda r: -r["cheapness"])
+#     print_ranking(ranked)
+
+#     rank, pick, skipped = decide(ranked, budget)
+#     print_decision(rank, pick, skipped, budget)
+#     hr("═")
+
+
+# if __name__ == "__main__":
+#     main()
+
+

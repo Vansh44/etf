@@ -1,0 +1,432 @@
+2026-06-08 23:58:37,442  INFO      ================================================================
+2026-06-08 23:58:37,442  INFO        ETF Accumulation v3 (single pick)  |  2026-06-08 23:58:37
+2026-06-08 23:58:37,442  INFO        Mode: DRY RUN  |  Budget: Rs.500
+2026-06-08 23:58:37,442  INFO      ================================================================
+2026-06-08 23:58:37,442  ERROR       🔴 Auth failed: Missing credentials. Set GROWW_API_KEY and GROWW_TOTP_SECRET as environment variables.
+2026-06-08 23:59:24,514  INFO      ================================================================
+2026-06-08 23:59:24,514  INFO        ETF Accumulation v3 (single pick)  |  2026-06-08 23:59:24
+2026-06-08 23:59:24,514  INFO        Mode: DRY RUN  |  Budget: Rs.500
+2026-06-08 23:59:24,514  INFO      ================================================================
+2026-06-08 23:59:24,514  ERROR       🔴 Auth failed: Missing credentials. Set GROWW_API_KEY and GROWW_TOTP_SECRET as environment variables.
+2026-06-08 23:59:55,354  INFO      ================================================================
+2026-06-08 23:59:55,354  INFO        ETF Accumulation v3 (single pick)  |  2026-06-08 23:59:55
+2026-06-08 23:59:55,354  INFO        Mode: DRY RUN  |  Budget: Rs.500
+2026-06-08 23:59:55,354  INFO      ================================================================
+2026-06-08 23:59:56,325  INFO        📊 NIFTYBEES   | price Rs.  262.56 | drawdown  5.43%
+2026-06-08 23:59:56,870  INFO        📊 JUNIORBEES  | price Rs.  744.88 | drawdown  3.90%
+2026-06-08 23:59:57,354  INFO        📊 MIDCAPETF   | price Rs.   22.37 | drawdown  4.32%
+2026-06-08 23:59:58,460  INFO        📊 GOLDBEES    | price Rs.  124.16 | drawdown  5.78%
+2026-06-08 23:59:58,937  INFO        📊 SILVERBEES  | price Rs.  227.93 | drawdown 15.87%
+2026-06-08 23:59:59,453  WARNING     ⚠ Not enough data for NETFLTGILT (0 candles).
+2026-06-08 23:59:59,759  INFO        📦 Holdings unavailable — concentration cap not enforced.
+2026-06-08 23:59:59,759  INFO      
+  🏆 Ranked cheapest → priciest:
+2026-06-08 23:59:59,759  INFO           #1: SILVERBEES  | drawdown 15.87%
+2026-06-08 23:59:59,760  INFO           #2: GOLDBEES    | drawdown  5.78%
+2026-06-08 23:59:59,760  INFO           #3: NIFTYBEES   | drawdown  5.43%
+2026-06-08 23:59:59,760  INFO           #4: MIDCAPETF   | drawdown  4.32%
+2026-06-08 23:59:59,760  INFO           #5: JUNIORBEES  | drawdown  3.90%
+2026-06-08 23:59:59,760  INFO      
+  >>> Attempt #1: SILVERBEES
+2026-06-08 23:59:59,969  INFO      ------------------------------------------------------------
+2026-06-08 23:59:59,969  INFO        CHEAPEST PICK : Nippon Silver ETF (SILVERBEES)
+2026-06-08 23:59:59,969  INFO        Drawdown      : 15.87% below 50-day high
+2026-06-08 23:59:59,970  INFO        Live LTP      : Rs.227.93  |  Limit: Rs.228.39
+2026-06-08 23:59:59,970  INFO        Buying        : 2 units = Rs.456.78
+2026-06-08 23:59:59,970  INFO      ------------------------------------------------------------
+2026-06-08 23:59:59,970  INFO        🟡 DRY RUN — order NOT placed.
+2026-06-08 23:59:59,970  INFO        ✅ Done for today.
+2026-06-09 00:00:26,076  INFO      ================================================================
+2026-06-09 00:00:26,076  INFO        ETF Accumulation v3 (single pick)  |  2026-06-09 00:00:26
+2026-06-09 00:00:26,077  INFO        Mode: LIVE  |  Budget: Rs.500
+2026-06-09 00:00:26,077  INFO      ================================================================
+2026-06-09 00:00:26,597  INFO        📊 NIFTYBEES   | price Rs.  262.56 | drawdown  5.43%
+2026-06-09 00:00:27,106  INFO        📊 JUNIORBEES  | price Rs.  744.88 | drawdown  3.90%
+2026-06-09 00:00:27,630  INFO        📊 MIDCAPETF   | price Rs.   22.37 | drawdown  4.32%
+2026-06-09 00:00:28,156  INFO        📊 GOLDBEES    | price Rs.  124.16 | drawdown  5.78%
+2026-06-09 00:00:28,672  WARNING     ⚠ Not enough data for NETFLTGILT (0 candles).
+2026-06-09 00:00:28,977  INFO        📦 Holdings unavailable — concentration cap not enforced.
+2026-06-09 00:00:28,977  INFO      
+  🏆 Ranked cheapest → priciest:
+2026-06-09 00:00:28,978  INFO           #1: GOLDBEES    | drawdown  5.78%
+2026-06-09 00:00:28,978  INFO           #2: NIFTYBEES   | drawdown  5.43%
+2026-06-09 00:00:28,978  INFO           #3: MIDCAPETF   | drawdown  4.32%
+2026-06-09 00:00:28,978  INFO           #4: JUNIORBEES  | drawdown  3.90%
+2026-06-09 00:00:28,978  INFO      
+  >>> Attempt #1: GOLDBEES
+2026-06-09 00:00:29,197  INFO      ------------------------------------------------------------
+2026-06-09 00:00:29,197  INFO        CHEAPEST PICK : Nippon Gold ETF (GOLDBEES)
+2026-06-09 00:00:29,197  INFO        Drawdown      : 5.78% below 50-day high
+2026-06-09 00:00:29,197  INFO        Live LTP      : Rs.124.16  |  Limit: Rs.124.41
+2026-06-09 00:00:29,197  INFO        Buying        : 4 units = Rs.497.64
+2026-06-09 00:00:29,198  INFO      ------------------------------------------------------------
+2026-06-09 00:00:29,335  ERROR       🔴 Order failed for GOLDBEES: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:00:29,335  INFO      
+  >>> Attempt #2: NIFTYBEES
+2026-06-09 00:00:29,478  INFO      ------------------------------------------------------------
+2026-06-09 00:00:29,479  INFO        CHEAPEST PICK : Nippon Nifty 50 ETF (NIFTYBEES)
+2026-06-09 00:00:29,479  INFO        Drawdown      : 5.43% below 50-day high
+2026-06-09 00:00:29,479  INFO        Live LTP      : Rs.262.56  |  Limit: Rs.263.09
+2026-06-09 00:00:29,479  INFO        Buying        : 1 units = Rs.263.09
+2026-06-09 00:00:29,479  INFO      ------------------------------------------------------------
+2026-06-09 00:00:29,616  ERROR       🔴 Order failed for NIFTYBEES: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:00:29,617  INFO      
+  >>> Attempt #3: MIDCAPETF
+2026-06-09 00:00:29,828  INFO      ------------------------------------------------------------
+2026-06-09 00:00:29,828  INFO        CHEAPEST PICK : Mirae Nifty Midcap 150 ETF (MIDCAPETF)
+2026-06-09 00:00:29,828  INFO        Drawdown      : 4.32% below 50-day high
+2026-06-09 00:00:29,828  INFO        Live LTP      : Rs.22.37  |  Limit: Rs.22.41
+2026-06-09 00:00:29,828  INFO        Buying        : 22 units = Rs.493.02
+2026-06-09 00:00:29,829  INFO      ------------------------------------------------------------
+2026-06-09 00:00:29,970  ERROR       🔴 Order failed for MIDCAPETF: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:00:29,971  INFO      
+  >>> Attempt #4: JUNIORBEES
+2026-06-09 00:00:30,106  WARNING     ⚠ JUNIORBEES at Rs.746.37 > Rs.500 budget. Can't buy 1 unit. Trying next.
+2026-06-09 00:00:30,106  ERROR       🔴 All candidates failed. No order placed today.
+2026-06-09 00:01:11,987  INFO      ================================================================
+2026-06-09 00:01:11,987  INFO        ETF Accumulation v3 (single pick)  |  2026-06-09 00:01:11
+2026-06-09 00:01:11,987  INFO        Mode: LIVE  |  Budget: Rs.500
+2026-06-09 00:01:11,987  INFO      ================================================================
+2026-06-09 00:01:12,488  INFO        📊 MOMIDMTM    | price Rs.   62.10 | drawdown  4.34%
+2026-06-09 00:01:13,015  INFO        📊 ALPHA       | price Rs.   48.91 | drawdown  4.68%
+2026-06-09 00:01:13,470  INFO        📊 MODEFENCE   | price Rs.   98.38 | drawdown  5.01%
+2026-06-09 00:01:13,937  INFO        📊 MAKEINDIA   | price Rs.  157.36 | drawdown  3.96%
+2026-06-09 00:01:14,433  INFO        📊 BFSI        | price Rs.   25.64 | drawdown  7.57%
+2026-06-09 00:01:14,973  INFO        📊 MON100      | price Rs.  330.89 | drawdown  3.40%
+2026-06-09 00:01:15,484  INFO        📊 INFRAIETF   | price Rs.   93.58 | drawdown  4.30%
+2026-06-09 00:01:15,787  INFO        📦 Holdings unavailable — concentration cap not enforced.
+2026-06-09 00:01:15,788  INFO      
+  🏆 Ranked cheapest → priciest:
+2026-06-09 00:01:15,788  INFO           #1: BFSI        | drawdown  7.57%
+2026-06-09 00:01:15,788  INFO           #2: MODEFENCE   | drawdown  5.01%
+2026-06-09 00:01:15,789  INFO           #3: ALPHA       | drawdown  4.68%
+2026-06-09 00:01:15,790  INFO           #4: MOMIDMTM    | drawdown  4.34%
+2026-06-09 00:01:15,790  INFO           #5: INFRAIETF   | drawdown  4.30%
+2026-06-09 00:01:15,790  INFO           #6: MAKEINDIA   | drawdown  3.96%
+2026-06-09 00:01:15,790  INFO           #7: MON100      | drawdown  3.40%
+2026-06-09 00:01:15,790  INFO      
+  >>> Attempt #1: BFSI
+2026-06-09 00:01:15,979  INFO      ------------------------------------------------------------
+2026-06-09 00:01:15,979  INFO        CHEAPEST PICK : Mirae Asset Nifty Financial Services ETF (BFSI)
+2026-06-09 00:01:15,979  INFO        Drawdown      : 7.57% below 50-day high
+2026-06-09 00:01:15,979  INFO        Live LTP      : Rs.25.64  |  Limit: Rs.25.69
+2026-06-09 00:01:15,979  INFO        Buying        : 19 units = Rs.488.11
+2026-06-09 00:01:15,979  INFO      ------------------------------------------------------------
+2026-06-09 00:01:16,226  ERROR       🔴 Order failed for BFSI: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:01:16,227  INFO      
+  >>> Attempt #2: MODEFENCE
+2026-06-09 00:01:16,644  INFO      ------------------------------------------------------------
+2026-06-09 00:01:16,644  INFO        CHEAPEST PICK : Motilal Oswal Nifty India Defence ETF (MODEFENCE)
+2026-06-09 00:01:16,645  INFO        Drawdown      : 5.01% below 50-day high
+2026-06-09 00:01:16,645  INFO        Live LTP      : Rs.98.38  |  Limit: Rs.98.58
+2026-06-09 00:01:16,645  INFO        Buying        : 5 units = Rs.492.90
+2026-06-09 00:01:16,645  INFO      ------------------------------------------------------------
+2026-06-09 00:01:16,804  ERROR       🔴 Order failed for MODEFENCE: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:01:16,805  INFO      
+  >>> Attempt #3: ALPHA
+2026-06-09 00:01:17,035  INFO      ------------------------------------------------------------
+2026-06-09 00:01:17,036  INFO        CHEAPEST PICK : Kotak Nifty Alpha 50 ETF (ALPHA)
+2026-06-09 00:01:17,036  INFO        Drawdown      : 4.68% below 50-day high
+2026-06-09 00:01:17,036  INFO        Live LTP      : Rs.48.91  |  Limit: Rs.49.01
+2026-06-09 00:01:17,036  INFO        Buying        : 10 units = Rs.490.10
+2026-06-09 00:01:17,036  INFO      ------------------------------------------------------------
+2026-06-09 00:01:17,169  ERROR       🔴 Order failed for ALPHA: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:01:17,170  INFO      
+  >>> Attempt #4: MOMIDMTM
+2026-06-09 00:01:17,315  INFO      ------------------------------------------------------------
+2026-06-09 00:01:17,315  INFO        CHEAPEST PICK : Motilal Oswal Nifty Midcap 150 Momentum 50 ETF (MOMIDMTM)
+2026-06-09 00:01:17,315  INFO        Drawdown      : 4.34% below 50-day high
+2026-06-09 00:01:17,315  INFO        Live LTP      : Rs.62.10  |  Limit: Rs.62.22
+2026-06-09 00:01:17,316  INFO        Buying        : 8 units = Rs.497.76
+2026-06-09 00:01:17,316  INFO      ------------------------------------------------------------
+2026-06-09 00:01:17,541  ERROR       🔴 Order failed for MOMIDMTM: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:01:17,542  INFO      
+  >>> Attempt #5: INFRAIETF
+2026-06-09 00:01:17,691  INFO      ------------------------------------------------------------
+2026-06-09 00:01:17,691  INFO        CHEAPEST PICK : ICICI Prudential Nifty Infrastructure ETF (INFRAIETF)
+2026-06-09 00:01:17,691  INFO        Drawdown      : 4.30% below 50-day high
+2026-06-09 00:01:17,691  INFO        Live LTP      : Rs.93.58  |  Limit: Rs.93.77
+2026-06-09 00:01:17,691  INFO        Buying        : 5 units = Rs.468.85
+2026-06-09 00:01:17,691  INFO      ------------------------------------------------------------
+2026-06-09 00:01:17,862  ERROR       🔴 Order failed for INFRAIETF: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:01:17,863  INFO      
+  >>> Attempt #6: MAKEINDIA
+2026-06-09 00:01:18,071  INFO      ------------------------------------------------------------
+2026-06-09 00:01:18,071  INFO        CHEAPEST PICK : Mirae Asset Nifty India Manufacturing ETF (MAKEINDIA)
+2026-06-09 00:01:18,072  INFO        Drawdown      : 3.96% below 50-day high
+2026-06-09 00:01:18,072  INFO        Live LTP      : Rs.157.36  |  Limit: Rs.157.67
+2026-06-09 00:01:18,072  INFO        Buying        : 3 units = Rs.473.01
+2026-06-09 00:01:18,072  INFO      ------------------------------------------------------------
+2026-06-09 00:01:18,237  ERROR       🔴 Order failed for MAKEINDIA: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:01:18,237  INFO      
+  >>> Attempt #7: MON100
+2026-06-09 00:01:18,369  INFO      ------------------------------------------------------------
+2026-06-09 00:01:18,370  INFO        CHEAPEST PICK : Motilal Oswal NASDAQ 100 ETF (MON100)
+2026-06-09 00:01:18,370  INFO        Drawdown      : 3.40% below 50-day high
+2026-06-09 00:01:18,370  INFO        Live LTP      : Rs.330.89  |  Limit: Rs.331.55
+2026-06-09 00:01:18,370  INFO        Buying        : 1 units = Rs.331.55
+2026-06-09 00:01:18,371  INFO      ------------------------------------------------------------
+2026-06-09 00:01:18,581  ERROR       🔴 Order failed for MON100: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:01:18,583  ERROR       🔴 All candidates failed. No order placed today.
+2026-06-09 00:02:11,441  INFO      ================================================================
+2026-06-09 00:02:11,442  INFO        ETF Accumulation v3 (single pick)  |  2026-06-09 00:02:11
+2026-06-09 00:02:11,442  INFO        Mode: LIVE  |  Budget: Rs.500
+2026-06-09 00:02:11,442  INFO      ================================================================
+2026-06-09 00:02:11,977  INFO        📊 NIFTYBEES   | price Rs.  262.56 | drawdown  5.43%
+2026-06-09 00:02:12,486  INFO        📊 JUNIORBEES  | price Rs.  744.88 | drawdown  3.90%
+2026-06-09 00:02:13,008  INFO        📊 MIDCAPETF   | price Rs.   22.37 | drawdown  4.32%
+2026-06-09 00:02:13,532  INFO        📊 GOLDBEES    | price Rs.  124.16 | drawdown  5.78%
+2026-06-09 00:02:14,162  WARNING     ⚠ Not enough data for NETFLTGILT (0 candles).
+2026-06-09 00:02:14,716  INFO        📊 MON100      | price Rs.  330.89 | drawdown  3.40%
+2026-06-09 00:02:15,021  INFO        📦 Holdings unavailable — concentration cap not enforced.
+2026-06-09 00:02:15,022  INFO      
+  🏆 Ranked cheapest → priciest:
+2026-06-09 00:02:15,022  INFO           #1: GOLDBEES    | drawdown  5.78%
+2026-06-09 00:02:15,022  INFO           #2: NIFTYBEES   | drawdown  5.43%
+2026-06-09 00:02:15,022  INFO           #3: MIDCAPETF   | drawdown  4.32%
+2026-06-09 00:02:15,023  INFO           #4: JUNIORBEES  | drawdown  3.90%
+2026-06-09 00:02:15,023  INFO           #5: MON100      | drawdown  3.40%
+2026-06-09 00:02:15,023  INFO      
+  >>> Attempt #1: GOLDBEES
+2026-06-09 00:02:15,219  INFO      ------------------------------------------------------------
+2026-06-09 00:02:15,220  INFO        CHEAPEST PICK : Nippon Gold ETF (GOLDBEES)
+2026-06-09 00:02:15,220  INFO        Drawdown      : 5.78% below 50-day high
+2026-06-09 00:02:15,220  INFO        Live LTP      : Rs.124.16  |  Limit: Rs.124.41
+2026-06-09 00:02:15,220  INFO        Buying        : 4 units = Rs.497.64
+2026-06-09 00:02:15,220  INFO      ------------------------------------------------------------
+2026-06-09 00:02:15,365  ERROR       🔴 Order failed for GOLDBEES: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:02:15,365  INFO      
+  >>> Attempt #2: NIFTYBEES
+2026-06-09 00:02:15,503  INFO      ------------------------------------------------------------
+2026-06-09 00:02:15,504  INFO        CHEAPEST PICK : Nippon Nifty 50 ETF (NIFTYBEES)
+2026-06-09 00:02:15,504  INFO        Drawdown      : 5.43% below 50-day high
+2026-06-09 00:02:15,504  INFO        Live LTP      : Rs.262.56  |  Limit: Rs.263.09
+2026-06-09 00:02:15,504  INFO        Buying        : 1 units = Rs.263.09
+2026-06-09 00:02:15,504  INFO      ------------------------------------------------------------
+2026-06-09 00:02:15,735  ERROR       🔴 Order failed for NIFTYBEES: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:02:15,736  INFO      
+  >>> Attempt #3: MIDCAPETF
+2026-06-09 00:02:15,875  INFO      ------------------------------------------------------------
+2026-06-09 00:02:15,875  INFO        CHEAPEST PICK : Mirae Nifty Midcap 150 ETF (MIDCAPETF)
+2026-06-09 00:02:15,875  INFO        Drawdown      : 4.32% below 50-day high
+2026-06-09 00:02:15,875  INFO        Live LTP      : Rs.22.37  |  Limit: Rs.22.41
+2026-06-09 00:02:15,875  INFO        Buying        : 22 units = Rs.493.02
+2026-06-09 00:02:15,875  INFO      ------------------------------------------------------------
+2026-06-09 00:02:16,022  ERROR       🔴 Order failed for MIDCAPETF: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:02:16,022  INFO      
+  >>> Attempt #4: JUNIORBEES
+2026-06-09 00:02:16,251  WARNING     ⚠ JUNIORBEES at Rs.746.37 > Rs.500 budget. Can't buy 1 unit. Trying next.
+2026-06-09 00:02:16,251  INFO      
+  >>> Attempt #5: MON100
+2026-06-09 00:02:16,383  INFO      ------------------------------------------------------------
+2026-06-09 00:02:16,383  INFO        CHEAPEST PICK : Motilal NASDAQ 100 ETF (MON100)
+2026-06-09 00:02:16,383  INFO        Drawdown      : 3.40% below 50-day high
+2026-06-09 00:02:16,383  INFO        Live LTP      : Rs.330.89  |  Limit: Rs.331.55
+2026-06-09 00:02:16,383  INFO        Buying        : 1 units = Rs.331.55
+2026-06-09 00:02:16,383  INFO      ------------------------------------------------------------
+2026-06-09 00:02:16,541  ERROR       🔴 Order failed for MON100: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:02:16,541  ERROR       🔴 All candidates failed. No order placed today.
+2026-06-09 00:04:42,521  INFO      ================================================================
+2026-06-09 00:04:42,521  INFO        ETF Accumulation v3 (single pick)  |  2026-06-09 00:04:42
+2026-06-09 00:04:42,521  INFO        Mode: LIVE  |  Budget: Rs.1000
+2026-06-09 00:04:42,521  INFO      ================================================================
+2026-06-09 00:04:43,203  INFO        📊 NIFTYBEES   | price Rs.  262.56 | drawdown  5.43%
+2026-06-09 00:04:43,696  INFO        📊 JUNIORBEES  | price Rs.  744.88 | drawdown  3.90%
+2026-06-09 00:04:44,167  INFO        📊 MIDCAPETF   | price Rs.   22.37 | drawdown  4.32%
+2026-06-09 00:04:44,673  INFO        📊 GOLDBEES    | price Rs.  124.16 | drawdown  5.78%
+2026-06-09 00:04:45,173  WARNING     ⚠ Not enough data for NETFLTGILT (0 candles).
+2026-06-09 00:04:45,739  INFO        📊 MON100      | price Rs.  330.89 | drawdown  3.40%
+2026-06-09 00:04:46,040  INFO        📦 Holdings unavailable — concentration cap not enforced.
+2026-06-09 00:04:46,040  INFO      
+  🏆 Ranked cheapest → priciest:
+2026-06-09 00:04:46,041  INFO           #1: GOLDBEES    | drawdown  5.78%
+2026-06-09 00:04:46,041  INFO           #2: NIFTYBEES   | drawdown  5.43%
+2026-06-09 00:04:46,041  INFO           #3: MIDCAPETF   | drawdown  4.32%
+2026-06-09 00:04:46,041  INFO           #4: JUNIORBEES  | drawdown  3.90%
+2026-06-09 00:04:46,041  INFO           #5: MON100      | drawdown  3.40%
+2026-06-09 00:04:46,041  INFO      
+  >>> Attempt #1: GOLDBEES
+2026-06-09 00:04:46,218  INFO      ------------------------------------------------------------
+2026-06-09 00:04:46,218  INFO        CHEAPEST PICK : Nippon Gold ETF (GOLDBEES)
+2026-06-09 00:04:46,218  INFO        Drawdown      : 5.78% below 50-day high
+2026-06-09 00:04:46,218  INFO        Live LTP      : Rs.124.16  |  Limit: Rs.124.41
+2026-06-09 00:04:46,219  INFO        Buying        : 8 units = Rs.995.28
+2026-06-09 00:04:46,219  INFO      ------------------------------------------------------------
+2026-06-09 00:04:46,372  ERROR       🔴 Order failed for GOLDBEES: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:04:46,372  INFO      
+  >>> Attempt #2: NIFTYBEES
+2026-06-09 00:04:46,516  INFO      ------------------------------------------------------------
+2026-06-09 00:04:46,516  INFO        CHEAPEST PICK : Nippon Nifty 50 ETF (NIFTYBEES)
+2026-06-09 00:04:46,516  INFO        Drawdown      : 5.43% below 50-day high
+2026-06-09 00:04:46,516  INFO        Live LTP      : Rs.262.56  |  Limit: Rs.263.09
+2026-06-09 00:04:46,517  INFO        Buying        : 3 units = Rs.789.27
+2026-06-09 00:04:46,517  INFO      ------------------------------------------------------------
+2026-06-09 00:04:46,730  ERROR       🔴 Order failed for NIFTYBEES: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:04:46,731  INFO      
+  >>> Attempt #3: MIDCAPETF
+2026-06-09 00:04:46,875  INFO      ------------------------------------------------------------
+2026-06-09 00:04:46,876  INFO        CHEAPEST PICK : Mirae Nifty Midcap 150 ETF (MIDCAPETF)
+2026-06-09 00:04:46,876  INFO        Drawdown      : 4.32% below 50-day high
+2026-06-09 00:04:46,876  INFO        Live LTP      : Rs.22.37  |  Limit: Rs.22.41
+2026-06-09 00:04:46,876  INFO        Buying        : 44 units = Rs.986.04
+2026-06-09 00:04:46,876  INFO      ------------------------------------------------------------
+2026-06-09 00:04:47,022  ERROR       🔴 Order failed for MIDCAPETF: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:04:47,023  INFO      
+  >>> Attempt #4: JUNIORBEES
+2026-06-09 00:04:47,249  INFO      ------------------------------------------------------------
+2026-06-09 00:04:47,249  INFO        CHEAPEST PICK : Nippon Nifty Next 50 ETF (JUNIORBEES)
+2026-06-09 00:04:47,249  INFO        Drawdown      : 3.90% below 50-day high
+2026-06-09 00:04:47,249  INFO        Live LTP      : Rs.744.88  |  Limit: Rs.746.37
+2026-06-09 00:04:47,249  INFO        Buying        : 1 units = Rs.746.37
+2026-06-09 00:04:47,249  INFO      ------------------------------------------------------------
+2026-06-09 00:04:47,401  ERROR       🔴 Order failed for JUNIORBEES: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:04:47,402  INFO      
+  >>> Attempt #5: MON100
+2026-06-09 00:04:47,545  INFO      ------------------------------------------------------------
+2026-06-09 00:04:47,546  INFO        CHEAPEST PICK : Motilal NASDAQ 100 ETF (MON100)
+2026-06-09 00:04:47,546  INFO        Drawdown      : 3.40% below 50-day high
+2026-06-09 00:04:47,546  INFO        Live LTP      : Rs.330.89  |  Limit: Rs.331.55
+2026-06-09 00:04:47,546  INFO        Buying        : 3 units = Rs.994.65
+2026-06-09 00:04:47,546  INFO      ------------------------------------------------------------
+2026-06-09 00:04:47,811  ERROR       🔴 Order failed for MON100: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:04:47,811  ERROR       🔴 All candidates failed. No order placed today.
+2026-06-09 00:23:45,983  INFO      ================================================================
+2026-06-09 00:23:45,983  INFO        ETF Accumulation v3 (single pick)  |  2026-06-09 00:23:45
+2026-06-09 00:23:45,983  INFO        Mode: LIVE  |  Budget: Rs.1000
+2026-06-09 00:23:45,983  INFO      ================================================================
+2026-06-09 00:23:48,093  INFO        📊 NIFTYBEES   | price Rs.  262.56 | drawdown  5.43%
+2026-06-09 00:23:48,597  INFO        📊 JUNIORBEES  | price Rs.  744.88 | drawdown  3.90%
+2026-06-09 00:23:49,104  INFO        📊 MIDCAPETF   | price Rs.   22.37 | drawdown  4.32%
+2026-06-09 00:23:49,644  INFO        📊 GOLDBEES    | price Rs.  124.16 | drawdown  5.78%
+2026-06-09 00:23:50,383  WARNING     ⚠ Not enough data for NETFLTGILT (0 candles).
+2026-06-09 00:23:50,870  INFO        📊 MON100      | price Rs.  330.89 | drawdown  3.40%
+2026-06-09 00:23:51,176  INFO        📦 Holdings unavailable — concentration cap not enforced.
+2026-06-09 00:23:51,176  INFO      
+  🏆 Ranked cheapest → priciest:
+2026-06-09 00:23:51,177  INFO           #1: GOLDBEES    | drawdown  5.78%
+2026-06-09 00:23:51,177  INFO           #2: NIFTYBEES   | drawdown  5.43%
+2026-06-09 00:23:51,177  INFO           #3: MIDCAPETF   | drawdown  4.32%
+2026-06-09 00:23:51,177  INFO           #4: JUNIORBEES  | drawdown  3.90%
+2026-06-09 00:23:51,177  INFO           #5: MON100      | drawdown  3.40%
+2026-06-09 00:23:51,178  INFO      
+  >>> Attempt #1: GOLDBEES
+2026-06-09 00:23:51,311  INFO      ------------------------------------------------------------
+2026-06-09 00:23:51,311  INFO        CHEAPEST PICK : Nippon Gold ETF (GOLDBEES)
+2026-06-09 00:23:51,311  INFO        Drawdown      : 5.78% below 50-day high
+2026-06-09 00:23:51,311  INFO        Live LTP      : Rs.124.16  |  Limit: Rs.124.41
+2026-06-09 00:23:51,312  INFO        Buying        : 8 units = Rs.995.28
+2026-06-09 00:23:51,312  INFO      ------------------------------------------------------------
+2026-06-09 00:23:51,448  ERROR       🔴 Order failed for GOLDBEES: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:23:51,449  INFO      
+  >>> Attempt #2: NIFTYBEES
+2026-06-09 00:23:51,698  INFO      ------------------------------------------------------------
+2026-06-09 00:23:51,699  INFO        CHEAPEST PICK : Nippon Nifty 50 ETF (NIFTYBEES)
+2026-06-09 00:23:51,699  INFO        Drawdown      : 5.43% below 50-day high
+2026-06-09 00:23:51,699  INFO        Live LTP      : Rs.262.56  |  Limit: Rs.263.09
+2026-06-09 00:23:51,699  INFO        Buying        : 3 units = Rs.789.27
+2026-06-09 00:23:51,699  INFO      ------------------------------------------------------------
+2026-06-09 00:23:51,844  ERROR       🔴 Order failed for NIFTYBEES: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:23:51,844  INFO      
+  >>> Attempt #3: MIDCAPETF
+2026-06-09 00:23:51,978  INFO      ------------------------------------------------------------
+2026-06-09 00:23:51,979  INFO        CHEAPEST PICK : Mirae Nifty Midcap 150 ETF (MIDCAPETF)
+2026-06-09 00:23:51,979  INFO        Drawdown      : 4.32% below 50-day high
+2026-06-09 00:23:51,979  INFO        Live LTP      : Rs.22.37  |  Limit: Rs.22.41
+2026-06-09 00:23:51,979  INFO        Buying        : 44 units = Rs.986.04
+2026-06-09 00:23:51,980  INFO      ------------------------------------------------------------
+2026-06-09 00:23:52,201  ERROR       🔴 Order failed for MIDCAPETF: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:23:52,202  INFO      
+  >>> Attempt #4: JUNIORBEES
+2026-06-09 00:23:52,337  INFO      ------------------------------------------------------------
+2026-06-09 00:23:52,338  INFO        CHEAPEST PICK : Nippon Nifty Next 50 ETF (JUNIORBEES)
+2026-06-09 00:23:52,338  INFO        Drawdown      : 3.90% below 50-day high
+2026-06-09 00:23:52,338  INFO        Live LTP      : Rs.744.88  |  Limit: Rs.746.37
+2026-06-09 00:23:52,338  INFO        Buying        : 1 units = Rs.746.37
+2026-06-09 00:23:52,338  INFO      ------------------------------------------------------------
+2026-06-09 00:23:52,472  ERROR       🔴 Order failed for JUNIORBEES: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:23:52,473  INFO      
+  >>> Attempt #5: MON100
+2026-06-09 00:23:52,695  INFO      ------------------------------------------------------------
+2026-06-09 00:23:52,696  INFO        CHEAPEST PICK : Motilal NASDAQ 100 ETF (MON100)
+2026-06-09 00:23:52,696  INFO        Drawdown      : 3.40% below 50-day high
+2026-06-09 00:23:52,696  INFO        Live LTP      : Rs.330.89  |  Limit: Rs.331.55
+2026-06-09 00:23:52,696  INFO        Buying        : 3 units = Rs.994.65
+2026-06-09 00:23:52,696  INFO      ------------------------------------------------------------
+2026-06-09 00:23:52,845  ERROR       🔴 Order failed for MON100: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:23:52,846  ERROR       🔴 All candidates failed. No order placed today.
+2026-06-09 00:28:29,917  INFO      ================================================================
+2026-06-09 00:28:29,918  INFO        ETF Accumulation v3 (single pick)  |  2026-06-09 00:28:29
+2026-06-09 00:28:29,918  INFO        Mode: LIVE  |  Budget: Rs.1000
+2026-06-09 00:28:29,918  INFO      ================================================================
+2026-06-09 00:28:30,509  INFO        📊 NIFTYBEES   | price Rs.  262.56 | drawdown  5.43%
+2026-06-09 00:28:31,044  INFO        📊 JUNIORBEES  | price Rs.  744.88 | drawdown  3.90%
+2026-06-09 00:28:31,553  INFO        📊 MIDCAPETF   | price Rs.   22.37 | drawdown  4.32%
+2026-06-09 00:28:32,075  INFO        📊 GOLDBEES    | price Rs.  124.16 | drawdown  5.78%
+2026-06-09 00:28:32,597  WARNING     ⚠ Not enough data for NETFLTGILT (0 candles).
+2026-06-09 00:28:33,126  INFO        📊 MON100      | price Rs.  330.89 | drawdown  3.40%
+2026-06-09 00:28:33,430  INFO        📦 Holdings unavailable — concentration cap not enforced.
+2026-06-09 00:28:33,430  INFO      
+  🏆 Ranked cheapest → priciest:
+2026-06-09 00:28:33,430  INFO           #1: GOLDBEES    | drawdown  5.78%
+2026-06-09 00:28:33,431  INFO           #2: NIFTYBEES   | drawdown  5.43%
+2026-06-09 00:28:33,431  INFO           #3: MIDCAPETF   | drawdown  4.32%
+2026-06-09 00:28:33,431  INFO           #4: JUNIORBEES  | drawdown  3.90%
+2026-06-09 00:28:33,431  INFO           #5: MON100      | drawdown  3.40%
+2026-06-09 00:28:33,431  INFO      
+  >>> Attempt #1: GOLDBEES
+2026-06-09 00:28:33,647  INFO      ------------------------------------------------------------
+2026-06-09 00:28:33,647  INFO        CHEAPEST PICK : Nippon Gold ETF (GOLDBEES)
+2026-06-09 00:28:33,647  INFO        Drawdown      : 5.78% below 50-day high
+2026-06-09 00:28:33,647  INFO        Live LTP      : Rs.124.16  |  Limit: Rs.124.41
+2026-06-09 00:28:33,647  INFO        Buying        : 8 units = Rs.995.28
+2026-06-09 00:28:33,647  INFO      ------------------------------------------------------------
+2026-06-09 00:28:34,023  ERROR       🔴 Order failed for GOLDBEES: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:28:34,024  INFO      
+  >>> Attempt #2: NIFTYBEES
+2026-06-09 00:28:34,343  INFO      ------------------------------------------------------------
+2026-06-09 00:28:34,344  INFO        CHEAPEST PICK : Nippon Nifty 50 ETF (NIFTYBEES)
+2026-06-09 00:28:34,344  INFO        Drawdown      : 5.43% below 50-day high
+2026-06-09 00:28:34,344  INFO        Live LTP      : Rs.262.56  |  Limit: Rs.263.09
+2026-06-09 00:28:34,344  INFO        Buying        : 3 units = Rs.789.27
+2026-06-09 00:28:34,344  INFO      ------------------------------------------------------------
+2026-06-09 00:28:34,505  ERROR       🔴 Order failed for NIFTYBEES: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:28:34,506  INFO      
+  >>> Attempt #3: MIDCAPETF
+2026-06-09 00:28:34,693  INFO      ------------------------------------------------------------
+2026-06-09 00:28:34,693  INFO        CHEAPEST PICK : Mirae Nifty Midcap 150 ETF (MIDCAPETF)
+2026-06-09 00:28:34,693  INFO        Drawdown      : 4.32% below 50-day high
+2026-06-09 00:28:34,693  INFO        Live LTP      : Rs.22.37  |  Limit: Rs.22.41
+2026-06-09 00:28:34,693  INFO        Buying        : 44 units = Rs.986.04
+2026-06-09 00:28:34,693  INFO      ------------------------------------------------------------
+2026-06-09 00:28:34,842  ERROR       🔴 Order failed for MIDCAPETF: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:28:34,842  INFO      
+  >>> Attempt #4: JUNIORBEES
+2026-06-09 00:28:34,987  INFO      ------------------------------------------------------------
+2026-06-09 00:28:34,987  INFO        CHEAPEST PICK : Nippon Nifty Next 50 ETF (JUNIORBEES)
+2026-06-09 00:28:34,987  INFO        Drawdown      : 3.90% below 50-day high
+2026-06-09 00:28:34,987  INFO        Live LTP      : Rs.744.88  |  Limit: Rs.746.37
+2026-06-09 00:28:34,987  INFO        Buying        : 1 units = Rs.746.37
+2026-06-09 00:28:34,987  INFO      ------------------------------------------------------------
+2026-06-09 00:28:35,217  ERROR       🔴 Order failed for JUNIORBEES: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:28:35,218  INFO      
+  >>> Attempt #5: MON100
+2026-06-09 00:28:35,367  INFO      ------------------------------------------------------------
+2026-06-09 00:28:35,368  INFO        CHEAPEST PICK : Motilal NASDAQ 100 ETF (MON100)
+2026-06-09 00:28:35,368  INFO        Drawdown      : 3.40% below 50-day high
+2026-06-09 00:28:35,368  INFO        Live LTP      : Rs.330.89  |  Limit: Rs.331.55
+2026-06-09 00:28:35,368  INFO        Buying        : 3 units = Rs.994.65
+2026-06-09 00:28:35,368  INFO      ------------------------------------------------------------
+2026-06-09 00:28:35,548  ERROR       🔴 Order failed for MON100: Your registered IPs are currently inactive.. Trying next.
+2026-06-09 00:28:35,549  ERROR       🔴 All candidates failed. No order placed today.
+2026-08-05 01:31:10,153  INFO      ========================================================================
+2026-08-05 01:31:10,153  INFO        Weekly ETF Buy  |  2026-08-05 01:31:10 IST  |  2026-W32
+2026-08-05 01:31:10,153  INFO      ========================================================================
+2026-08-05 01:31:10,153  INFO        🛑 NOT TRADING. Outside market hours — NSE cash trades 09:15-15:30 IST, it is now 01:31 IST.
+2026-08-05 01:32:58,172  INFO      ========================================================================
+2026-08-05 01:32:58,172  INFO        Weekly ETF Buy  |  2026-08-05 01:32:58 IST  |  2026-W32
+2026-08-05 01:32:58,172  INFO      ========================================================================
+2026-08-05 01:32:58,172  INFO        🛑 NOT TRADING. Outside market hours — NSE cash trades 09:15-15:30 IST, it is now 01:32 IST.
+2026-08-05 01:33:31,048  INFO      ========================================================================
+2026-08-05 01:33:31,048  INFO        Weekly ETF Buy  |  2026-08-05 01:33:31 IST  |  2026-W32
+2026-08-05 01:33:31,048  INFO      ========================================================================
+2026-08-05 01:33:31,048  INFO        🛑 NOT TRADING. Outside market hours — NSE cash trades 09:15-15:30 IST, it is now 01:33 IST.
