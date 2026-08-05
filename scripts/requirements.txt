@@ -1,0 +1,10 @@
+# Dependencies for scripts/fetch_prices.py (run by the GitHub Action).
+#
+# yfinance is not interchangeable with a plain HTTP client here: Yahoo returns
+# HTTP 429 to any request whose TLS fingerprint isn't a real browser's, and
+# yfinance gets past that by using curl_cffi with impersonate="chrome".
+# curl_cffi is listed explicitly because that behaviour is load-bearing, not
+# incidental — see web/README.md "How the data gets in".
+yfinance>=1.3.0
+curl_cffi>=0.15.0
+requests>=2.32.0

@@ -23,15 +23,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
+          # pip caching needs an explicit dependency file; without this the
+          # step fails with "No file matched to [**/requirements.txt ...]".
+          cache-dependency-path: scripts/requirements.txt
 
       - name: Install dependencies
-        run: pip install yfinance requests
+        run: pip install -r scripts/requirements.txt
 
       - name: Fetch prices and write to Supabase
         env:
