@@ -19,6 +19,7 @@ The service-role key bypasses Row Level Security, which is what lets this
 write. Keep it in GitHub Secrets — never in the web app.
 """
 
+import base64
 import json
 import logging
 import os
@@ -41,6 +42,55 @@ MIN_CANDLES = 100     # the web app needs this many to score an ETF
 def die(message: str) -> None:
     log.error(message)
     sys.exit(1)
+
+
+def key_role(key: str):
+    """
+    Which Supabase role this key carries, or None if it can't be determined.
+
+    Never logs or returns the key itself. Handles both the legacy JWT keys
+    (role in the payload) and the newer sb_publishable_ / sb_secret_ format.
+    """
+    if key.startswith("sb_secret_"):
+        return "service_role"
+    if key.startswith("sb_publishable_"):
+        return "anon"
+    try:
+        payload = key.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        return json.loads(base64.urlsafe_b64decode(payload)).get("role")
+    except Exception:
+        return None
+
+
+def check_credentials() -> None:
+    """Fail early and specifically, rather than with an opaque RLS error later."""
+    missing = [
+        name
+        for name, value in (("SUPABASE_URL", SUPABASE_URL),
+                            ("SUPABASE_SERVICE_ROLE_KEY", SERVICE_KEY))
+        if not value
+    ]
+    if missing:
+        die(
+            f"Missing: {', '.join(missing)}. Add them under GitHub -> Settings -> "
+            f"Secrets and variables -> Actions. SUPABASE_SERVICE_ROLE_KEY must be the "
+            f"service_role key from Supabase -> Project Settings -> API, NOT the anon key."
+        )
+
+    role = key_role(SERVICE_KEY)
+    if role == "anon":
+        die(
+            "SUPABASE_SERVICE_ROLE_KEY holds the ANON key, which is read-only under "
+            "Row Level Security and cannot write prices. Replace it with the "
+            "service_role key (Supabase -> Project Settings -> API -> service_role). "
+            "Keep that key only in GitHub Secrets — never in Vercel or the web app."
+        )
+    if role != "service_role":
+        log.warning(
+            f"Could not confirm the key is a service_role key (role={role!r}). "
+            f"Continuing; a 401/403 on write means it is the wrong key."
+        )
 
 
 def rest(method: str, path: str, **kwargs) -> requests.Response:
@@ -67,8 +117,7 @@ def symbols_to_fetch() -> list:
 
 
 def main() -> None:
-    if not SUPABASE_URL or not SERVICE_KEY:
-        die("Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.")
+    check_credentials()
 
     import yfinance as yf  # imported late so the env check fails fast
 

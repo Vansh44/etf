@@ -111,10 +111,15 @@ The workflow lives at `.github/workflows/fetch-prices.yml` in the repo root.
 
 1. Push this repo to GitHub.
 2. **Settings → Secrets and variables → Actions → New repository secret**, add:
-   - `SUPABASE_URL` — same Project URL as above
    - `SUPABASE_SERVICE_ROLE_KEY` — the **service_role** key (Project Settings →
-     API). This one bypasses RLS, which is what lets the job write. It belongs
-     only here, never in Vercel or the app.
+     API). It bypasses RLS, which is what lets the job write. It belongs only
+     here, never in Vercel or the app.
+   - `SUPABASE_URL` — the Project URL. Optional if you already have a secret
+     named `NEXT_PUBLIC_SUPABASE_URL`; the workflow accepts either.
+
+   > The **anon** key will not work here. Under RLS it has read-only access to
+   > `prices`, so the write fails. The job checks the key's role claim up front
+   > and stops with a clear message rather than a confusing 401 later.
 3. **Actions tab → Fetch ETF prices → Run workflow** to populate the table
    immediately. Until you do, the dashboard will say there's no price data.
 

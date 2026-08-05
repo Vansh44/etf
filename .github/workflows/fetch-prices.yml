@@ -38,6 +38,10 @@ jobs:
 
       - name: Fetch prices and write to Supabase
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          # Accepts either name, so it works whether you added SUPABASE_URL or
+          # reused the NEXT_PUBLIC_SUPABASE_URL secret from the web app.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          # Must be the SERVICE_ROLE key. The anon key is read-only under RLS
+          # and cannot write to the prices table.
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python3 scripts/fetch_prices.py
