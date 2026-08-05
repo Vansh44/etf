@@ -32,8 +32,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-7s  %(
 log = logging.getLogger("fetch_prices")
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 
-SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").rstrip("/")
-SERVICE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+# .strip() is load-bearing: pasting a value into GitHub's secret box easily
+# captures a trailing newline, which then lands inside the request URL as %0A
+# and fails DNS resolution with a baffling "Name or service not known".
+SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+SERVICE_KEY = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
 
 HISTORY_PERIOD = "1y"
 MIN_CANDLES = 100     # the web app needs this many to score an ETF
@@ -77,6 +80,18 @@ def check_credentials() -> None:
             f"Secrets and variables -> Actions. SUPABASE_SERVICE_ROLE_KEY must be the "
             f"service_role key from Supabase -> Project Settings -> API, NOT the anon key."
         )
+
+    if not SUPABASE_URL.startswith("https://"):
+        die(
+            f"SUPABASE_URL must start with https:// (got {SUPABASE_URL[:40]!r}). "
+            f"Use the Project URL from Supabase -> Project Settings -> API, "
+            f"e.g. https://yourref.supabase.co"
+        )
+    # Any whitespace left inside means the secret is malformed, not just padded.
+    if any(c.isspace() for c in SUPABASE_URL):
+        die(f"SUPABASE_URL contains whitespace inside the value: {SUPABASE_URL!r}")
+    if any(c.isspace() for c in SERVICE_KEY):
+        die("SUPABASE_SERVICE_ROLE_KEY contains whitespace — re-paste it with no line breaks.")
 
     role = key_role(SERVICE_KEY)
     if role == "anon":
