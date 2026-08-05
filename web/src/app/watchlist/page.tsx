@@ -3,7 +3,7 @@ import { isAllowed } from "@/lib/supabase/server";
 import { addWatchlistItem, deleteWatchlistItem, updateWatchlistItem } from "@/app/actions";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { NotAllowedNotice } from "@/components/NotAllowedNotice";
-import { Card, CardHeader, EmptyState } from "@/components/ui";
+import { Card, CardHeader, EmptyState, Pill } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -14,16 +14,18 @@ const inputStyle = { borderColor: "var(--hairline)", outlineColor: "var(--accent
 export default async function WatchlistPage() {
   if (!(await isAllowed())) return <NotAllowedNotice />;
   const items = await getWatchlist();
+  const targetSum = items.reduce((sum, i) => sum + (i.targetPct ?? 0), 0);
+  const anyTargets = items.some((i) => i.targetPct !== null);
 
   return (
     <main className="mx-auto max-w-3xl space-y-4 p-3 pb-16 sm:space-y-5 sm:p-6">
       <Card>
         <CardHeader
           title="Watchlist"
-          hint="The ETFs the advisor may recommend. Use exact NSE symbols — a wrong symbol simply won't be found. Each needs about a year of history to be scored."
+          hint="The ETFs the advisor may recommend, and the share of your portfolio you want each to be. Use exact NSE symbols. Leave a target blank to score that ETF on cheapness alone."
         />
         <ActionForm action={addWatchlistItem} resetOnSuccess className="p-4 sm:p-5">
-          <div className="grid gap-3 sm:grid-cols-[13rem_1fr_auto] sm:items-end">
+          <div className="grid gap-3 sm:grid-cols-[11rem_1fr_7rem_auto] sm:items-end">
             <label className="block">
               <span className="mb-1 block text-xs font-medium" style={{ color: "var(--ink-2)" }}>
                 NSE symbol
@@ -51,6 +53,22 @@ export default async function WatchlistPage() {
                 style={inputStyle}
               />
             </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium" style={{ color: "var(--ink-2)" }}>
+                Target %
+              </span>
+              <input
+                name="target_pct"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                max="100"
+                step="0.5"
+                placeholder="optional"
+                className={`${input} tnum`}
+                style={inputStyle}
+              />
+            </label>
             <SubmitButton pendingText="Adding…" className="min-h-11 w-full sm:w-auto">
               Add
             </SubmitButton>
@@ -59,7 +77,16 @@ export default async function WatchlistPage() {
       </Card>
 
       <Card>
-        <CardHeader title={`${items.length} ETF${items.length === 1 ? "" : "s"} in the pool`} />
+        <CardHeader
+          title={`${items.length} ETF${items.length === 1 ? "" : "s"} in the pool`}
+          right={
+            anyTargets ? (
+              <Pill tone={Math.abs(targetSum - 100) < 0.5 ? "gain" : "loss"}>
+                targets total {targetSum.toFixed(1)}%
+              </Pill>
+            ) : undefined
+          }
+        />
         {items.length === 0 ? (
           <EmptyState title="No ETFs yet">Add one above to get started.</EmptyState>
         ) : (
@@ -79,6 +106,19 @@ export default async function WatchlistPage() {
                       defaultValue={item.name}
                       aria-label={`Display name for ${item.symbol}`}
                       className={input}
+                      style={inputStyle}
+                    />
+                    <input
+                      name="target_pct"
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      defaultValue={item.targetPct ?? ""}
+                      placeholder="—"
+                      aria-label={`Target percent for ${item.symbol}`}
+                      className={`${input} tnum w-20 shrink-0`}
                       style={inputStyle}
                     />
                     <SubmitButton variant="ghost" pendingText="…" className="min-h-11 shrink-0">

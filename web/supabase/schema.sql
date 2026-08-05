@@ -208,3 +208,64 @@ from (values
   ('GOLDBEES',  119.06), ('SILVERBEES', 210.40)
 ) as v(symbol, avg_price)
 where h.symbol = v.symbol and h.avg_price is null;
+
+
+-- ============================================================================
+--  MIGRATION — target allocations, allocation-gap scoring, NAV, staleness
+--  Safe to re-run. Apply by pasting this whole file again.
+-- ============================================================================
+
+-- ─── Target allocation per ETF ───────────────────────────────────────────────
+-- Your desired portfolio shape, e.g. NIFTYBEES 35, GOLDBEES 15, SILVERBEES 5.
+-- NULL means "no target" — such an ETF scores on cheapness alone.
+-- A target only does something for ETFs on the watchlist, because those are the
+-- only ones the advisor can recommend buying.
+alter table watchlist add column if not exists target_pct numeric;
+do $$ begin
+  alter table watchlist add constraint watchlist_target_range
+    check (target_pct is null or (target_pct >= 0 and target_pct <= 100));
+exception when duplicate_object then null; end $$;
+
+-- ─── Settings: the single cap is replaced by gap-based scoring ───────────────
+alter table settings add column if not exists gap_weight       numeric not null default 1.0;
+alter table settings add column if not exists max_premium_pct  numeric not null default 1.5;
+alter table settings add column if not exists min_candles      integer not null default 252;
+alter table settings add column if not exists max_bar_age_days integer not null default 4;
+alter table settings add column if not exists max_nav_age_days integer not null default 3;
+
+do $$ begin
+  alter table settings add constraint settings_gap_weight_range
+    check (gap_weight >= 0 and gap_weight <= 20);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table settings add constraint settings_premium_range
+    check (max_premium_pct >= 0 and max_premium_pct <= 50);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table settings add constraint settings_min_candles_range
+    check (min_candles >= 60 and min_candles <= 500);
+exception when duplicate_object then null; end $$;
+
+-- The concentration cap is gone: an overweight ETF now gets a negative
+-- allocation gap, which lowers its score, instead of being hard-blocked.
+alter table settings drop column if exists max_weight_pct;
+
+-- ─── NAV, for the premium check ─────────────────────────────────────────────
+-- Written by the fetcher from AMFI's daily NAV file, matched by ISIN.
+-- nav_date can legitimately lag the price by a day for international ETFs
+-- (MON100), which is why it is stored rather than assumed to be today.
+alter table prices add column if not exists nav      numeric;
+alter table prices add column if not exists nav_date date;
+do $$ begin
+  alter table prices add constraint prices_nav_positive check (nav is null or nav > 0);
+exception when duplicate_object then null; end $$;
+
+-- ─── Seed targets matching the current watchlist ────────────────────────────
+-- Adjust freely in the app. These sum to 100.
+update watchlist w set target_pct = v.target
+from (values
+  ('MOMIDMTM', 20), ('MODEFENCE', 15), ('MAKEINDIA', 15),
+  ('BFSI',     15), ('INFRAIETF', 15), ('ALPHA',     10),
+  ('MON100',   10)
+) as v(symbol, target)
+where w.symbol = v.symbol and w.target_pct is null;

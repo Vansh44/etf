@@ -4,13 +4,14 @@ Hosted version of the local Python advisor. Tells you which watchlist ETF is
 cheapest right now and how many units fit your budget. **It places no orders** —
 you place the trade yourself in the Groww app.
 
-- **Data**: Yahoo Finance, fetched by a scheduled GitHub Action into Supabase
+- **Data**: Yahoo Finance prices + AMFI NAVs, fetched by a scheduled GitHub Action into Supabase
 - **Backend**: Supabase Postgres
 - **Auth**: Google sign-in, restricted to an email allowlist
 - **Host**: Vercel
 
-The strategy logic in `src/lib/strategy.ts` is a verified port of the Python
-`main.py` — see [Parity](#parity) below.
+All scoring lives in `src/lib/strategy.ts`. The repo-root `main.py` is an older,
+reduced version of the same idea — see
+[The local Python script has diverged](#the-local-python-script-has-diverged).
 
 ## How the data gets in
 
@@ -41,24 +42,60 @@ rate-limited.
 ## The strategy
 
 ```
-1. TREND CHECK   above its 50-day average           -> keep
-                 below 50-day, above the 14-day      -> keep (dip turning up)
-                 below BOTH                          -> discard, still falling
-2. CHEAPNESS     score survivors 0-100, cheapest first
-3. CAP           skip anything already over MAX_WEIGHT_PCT of the portfolio
-4. BUDGET        skip anything one unit of which busts the budget
-5. RECOMMEND     the first candidate that survives
+1. FRESHNESS   refuse everything if prices missed a trading session;
+               exclude any symbol whose bar lags the newest one
+2. HISTORY     need `min_candles` sessions (default 252). Below the 252-session
+               scoring window, cheapness is discounted for confidence
+3. TREND       above the 50-day avg        -> keep
+               below 50-day, above 14-day   -> keep (dip turning up)
+               below BOTH                   -> discard, still falling
+4. PREMIUM     market price too far above NAV -> discard
+5. SCORE       final = cheapness x confidence + gap_weight x allocation_gap
+6. BUDGET      skip anything one unit of which busts the budget
+7. RECOMMEND   the highest-scoring candidate that fits
 ```
 
-Cheapness is measured against each ETF's **own** history, never against the
-other ETFs, so a volatile ETF and a steady one are comparable. The rupee price
-level carries no information — the score is scale-invariant.
+**Cheapness decides when to buy; the allocation gap decides what to buy.**
+
+There is no hard concentration cap. An ETF above its target earns a *negative*
+gap, which lowers its score, instead of being blocked outright.
+
+### Cheapness (0–100)
+
+Measured against each ETF's **own** history, never against the other ETFs, so a
+volatile ETF and a steady one are comparable. Scale-invariant — the rupee price
+level carries no information.
 
 - **A** — where the live price sits in its own trailing 1-year range of closes
   (0 = at its 52-week low) → contributes `100 − percentile`
 - **B** — today's drawdown from its 50-day high, ranked against its own past
   year of drawdowns → contributes that percentile
 - `cheapness = (A + B) / 2`
+
+Both drawdown windows are exactly `HIGH_LOOKBACK` observations wide: history
+uses `closes[i-look+1 .. i]`, and today uses `look − 1` prior closes plus the
+live price. Getting this wrong gives today a window one observation too wide,
+which makes today's dip look systematically deeper than the history it is
+ranked against.
+
+### Allocation gap
+
+`gap = target_pct − current_pct`, in percentage points, contributing
+`gap_weight × gap` to the score. Set targets per ETF on the Watchlist page; they
+should sum to 100 and the app tells you when they don't. `gap_weight = 0`
+ignores targets entirely; higher values make them dominate cheapness.
+
+### Premium over NAV
+
+NAV comes from AMFI's daily file, joined to NSE tickers by ISIN via Groww's
+instrument master. An ETF trading more than `max_premium_pct` above NAV is
+refused — you would be paying more than the underlying is worth.
+
+This is not theoretical: MON100 measured **+16.12% over NAV** during
+development, because Indian funds hitting the SEBI overseas cap cannot create
+new units. International ETFs also publish NAV a day late, so a NAV up to
+`max_nav_age_days` old is still used; older than that and the check is skipped
+rather than trusted.
 
 ---
 
@@ -187,25 +224,31 @@ is yours.
 
 ---
 
-## Parity
-
-`src/lib/strategy.ts` must agree with the Python `main.py`. To re-verify:
+## Tests
 
 ```bash
-python3 web/scripts/make_fixture.py
+cd web && node --experimental-strip-types scripts/test-strategy.ts
 ```
 
-```bash
-cd web && node --experimental-strip-types scripts/parity.ts scripts/fixture.json > scripts/actual.json
-```
+36 assertions covering the drawdown window consistency, history confidence,
+premium-over-NAV handling, allocation-gap ranking, staleness refusal, and the
+budget walk.
 
-Then diff `scripts/actual.json` against `scripts/expected.json`. Both sides read
-the *same* closes and live prices from `fixture.json`, so a price tick between
-runs can't masquerade as a port bug. Last checked: all 7 symbols × 10 fields
-identical to within 1e-6.
+One fixture note worth knowing if you add tests: a **flat or sine price series
+fails the trend check**, because its moving averages sit at the same level as
+the price, so it is correctly discarded as "still falling". Use the `rising()` /
+`pulledBack()` helpers, which pass the trend check by construction.
 
-There's also an end-to-end check that hits Yahoo for real:
+## The local Python script has diverged
 
-```bash
-cd web && node --experimental-strip-types scripts/e2e.ts
-```
+`main.py` in the repo root is the original standalone advisor. It shares the
+cheapness formula and the trend rule, and it has the same drawdown-window fix
+and 252-session minimum. But it does **not** have:
+
+- target allocations or allocation-gap scoring (no database to read them from)
+- the premium-over-NAV check
+- the stale-session refusal
+
+That last two matter. Running `main.py` today recommends MON100 — the ETF the
+web app refuses because it is 16% above NAV. **Treat the web app as
+authoritative**, and either retire `main.py` or remember what it doesn't check.

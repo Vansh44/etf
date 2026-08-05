@@ -24,7 +24,7 @@ export default async function SettingsPage() {
     <main className="mx-auto max-w-3xl space-y-4 p-3 pb-16 sm:space-y-5 sm:p-6">
       {/* ── strategy settings ──────────────────────────────────── */}
       <Card>
-        <CardHeader title="Strategy" hint="How much to spend and how concentrated to allow." />
+        <CardHeader title="Strategy" hint="How much to spend, how hard to chase your target allocations, and when to refuse the data." />
         <ActionForm action={updateSettings} className="space-y-4 p-4 sm:p-5">
           <Field
             label="Budget (Rs. per run)"
@@ -43,16 +43,84 @@ export default async function SettingsPage() {
           </Field>
 
           <Field
-            label="Concentration cap (%)"
-            hint="Skip any ETF already above this share of portfolio value. Set to 100 to disable."
+            label="Gap weight"
+            hint="How hard the allocation gap pulls. Score = cheapness + this × (target − current), in percentage points. 0 ignores targets entirely; 5 makes them dominate."
           >
             <input
-              name="max_weight_pct"
+              name="gap_weight"
+              type="number"
+              min="0"
+              max="20"
+              step="0.1"
+              defaultValue={settings.gapWeight}
+              required
+              className={input}
+              style={inputStyle}
+            />
+          </Field>
+
+          <Field
+            label="Max premium over NAV (%)"
+            hint="Refuse an ETF trading this far above the value of its holdings. International ETFs can run to +16% when funds hit the SEBI overseas cap."
+          >
+            <input
+              name="max_premium_pct"
+              type="number"
+              min="0"
+              max="50"
+              step="0.1"
+              defaultValue={settings.maxPremiumPct}
+              required
+              className={input}
+              style={inputStyle}
+            />
+          </Field>
+
+          <Field
+            label="Minimum history (sessions)"
+            hint="Cheapness is scored on a 252-session window, so 252 is the honest floor. Lower it and shorter histories are admitted with a proportionally reduced confidence."
+          >
+            <input
+              name="min_candles"
+              type="number"
+              min="60"
+              max="500"
+              step="1"
+              defaultValue={settings.minCandles}
+              required
+              className={input}
+              style={inputStyle}
+            />
+          </Field>
+
+          <Field
+            label="Max price age (days)"
+            hint="Refuse to recommend anything if the newest price is older than this — it means the fetcher missed a trading session."
+          >
+            <input
+              name="max_bar_age_days"
               type="number"
               min="1"
-              max="100"
+              max="30"
               step="1"
-              defaultValue={settings.maxWeightPct}
+              defaultValue={settings.maxBarAgeDays}
+              required
+              className={input}
+              style={inputStyle}
+            />
+          </Field>
+
+          <Field
+            label="Max NAV age (days)"
+            hint="Ignore a NAV older than this rather than trusting it. International ETFs legitimately publish NAV a day late."
+          >
+            <input
+              name="max_nav_age_days"
+              type="number"
+              min="1"
+              max="30"
+              step="1"
+              defaultValue={settings.maxNavAgeDays}
               required
               className={input}
               style={inputStyle}

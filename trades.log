@@ -459,3 +459,43 @@
 2026-08-05 03:05:51,438  INFO      ------------------------------------------------------------------------
 2026-08-05 03:05:51,438  INFO        Place this yourself in the Groww app — confirm the live price there first.
 2026-08-05 03:05:51,438  INFO        After it fills, set UNITS['MOMIDMTM'] = 83 in portfolio.py
+2026-08-06 02:38:50,651  INFO      ========================================================================
+2026-08-06 02:38:50,652  INFO        ETF Buy Advisor  |  2026-08-06 02:38:50 IST  |  data: Yahoo Finance
+2026-08-06 02:38:50,652  INFO      ========================================================================
+2026-08-06 02:38:50,652  INFO        💰 Budget Rs.2,500.00
+2026-08-06 02:38:53,108  INFO        🕒 Live prices as of 2026-08-05 15:25 IST (Yahoo 5-min bars, may lag ~15 min)
+2026-08-06 02:38:53,108  INFO        📦 PORTFOLIO
+2026-08-06 02:38:53,108  INFO           ETF           Units     Price       Value   Weight
+2026-08-06 02:38:53,108  INFO           GOLDBEES         92    119.34      10,979    39.3%
+2026-08-06 02:38:53,108  INFO           SILVERBEES       20    213.40       4,268    15.3%
+2026-08-06 02:38:53,108  INFO           MODEFENCE        39    103.06       4,019    14.4%
+2026-08-06 02:38:53,108  INFO           INFRAIETF        30     97.13       2,914    10.4%
+2026-08-06 02:38:53,108  INFO           MOMIDMTM         45     64.17       2,888    10.3%
+2026-08-06 02:38:53,108  INFO           MAKEINDIA        12    168.57       2,023     7.2%
+2026-08-06 02:38:53,108  INFO           ALPHA            10     53.20         532     1.9%
+2026-08-06 02:38:53,108  INFO           MON100            1    321.82         322     1.2%
+2026-08-06 02:38:53,108  INFO           BFSI              0     27.82           0     0.0%
+2026-08-06 02:38:53,108  INFO           TOTAL                              27,945
+2026-08-06 02:38:53,115  INFO        📉 CHEAPNESS — each ETF vs its OWN history, higher = cheaper
+2026-08-06 02:38:53,115  INFO           #  ETF           Score  in own range  dip now  dip vs own       trend
+2026-08-06 02:38:53,115  INFO           1  MON100         51.8           79%     6.1%         83%        >14D
+2026-08-06 02:38:53,115  INFO           2  MOMIDMTM       39.0           89%     4.3%         67%        >50D
+2026-08-06 02:38:53,115  INFO           3  BFSI           33.5           59%     1.0%         26%        >50D
+2026-08-06 02:38:53,115  INFO           4  INFRAIETF      27.4           67%     0.9%         22%        >50D
+2026-08-06 02:38:53,115  INFO           5  MODEFENCE      25.6           92%     3.6%         43%        >50D
+2026-08-06 02:38:53,115  INFO           6  MAKEINDIA       0.2          100%     0.0%          0%        >50D
+2026-08-06 02:38:53,115  INFO           7  ALPHA           0.0          100%     0.0%          0%        >50D
+2026-08-06 02:38:53,115  INFO           in own range = price position in its 1-yr range (low = cheap)
+2026-08-06 02:38:53,115  INFO           dip vs own   = how unusual today's dip is for it (high = cheap)
+2026-08-06 02:38:53,115  INFO           trend        = which test kept it in (>50D or >14D)
+2026-08-06 02:38:53,115  INFO      ------------------------------------------------------------------------
+2026-08-06 02:38:53,115  INFO        👉 BUY        : Motilal Oswal NASDAQ 100 ETF (MON100)
+2026-08-06 02:38:53,115  INFO        Cheapness    : 51.8/100 — 6.1% off its 50-day high, deeper than 83% of its own dips, sitting at the 79th percentile of its 1-year range
+2026-08-06 02:38:53,115  INFO        Trend        : Rs.321.82 under its 50-day avg Rs.327.92 but above its 14-day avg Rs.321.63 — turning up
+2026-08-06 02:38:53,115  INFO        Portfolio    : currently 1.2% of your holdings (cap 40%)
+2026-08-06 02:38:53,115  INFO        Live price   : Rs.321.82
+2026-08-06 02:38:53,115  INFO        Suggested    : 7 units @ LIMIT Rs.322.46 = Rs.2,257.22  (price +0.20%)
+2026-08-06 02:38:53,115  INFO        Left unspent : Rs.242.78
+2026-08-06 02:38:53,115  INFO      ------------------------------------------------------------------------
+2026-08-06 02:38:53,115  INFO        Place this yourself in the Groww app — confirm the live price there first.
+2026-08-06 02:38:53,115  INFO        After it fills, set UNITS['MON100'] = 8 in portfolio.py

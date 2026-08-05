@@ -38,8 +38,15 @@ logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
 SERVICE_KEY = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
 
-HISTORY_PERIOD = "1y"
-MIN_CANDLES = 100     # the web app needs this many to score an ETF
+HISTORY_PERIOD = "2y"   # the app scores against a 252-session window
+MIN_CANDLES = 120       # floor for storing at all; the app enforces its own, higher, bar
+
+# NAV, for the premium-over-underlying check.
+# AMFI publishes daily NAV for every Indian fund but keys it on ISIN, not NSE
+# ticker. Groww's public instrument master supplies ticker -> ISIN, so the two
+# join cleanly with no fuzzy name matching.
+INSTRUMENTS_URL = "https://growwapi-assets.groww.in/instruments/instrument.csv"
+AMFI_NAV_URL = "https://www.amfiindia.com/spages/NAVAll.txt"
 
 
 def die(message: str) -> None:
@@ -131,6 +138,78 @@ def symbols_to_fetch() -> list:
     return sorted(watchlist | holdings)
 
 
+def isin_map(symbols: list) -> dict:
+    """{NSE symbol: ISIN} from Groww's public instrument master."""
+    try:
+        import csv
+        import io
+
+        response = requests.get(INSTRUMENTS_URL, timeout=60)
+        response.raise_for_status()
+        wanted = set(symbols)
+        found = {}
+        for row in csv.DictReader(io.StringIO(response.text)):
+            if (
+                row.get("exchange") == "NSE"
+                and row.get("segment") == "CASH"
+                and row.get("trading_symbol") in wanted
+            ):
+                isin = (row.get("isin") or "").strip()
+                if isin:
+                    found[row["trading_symbol"]] = isin
+        log.info(f"  ISINs resolved: {len(found)}/{len(symbols)}")
+        return found
+    except Exception as exc:
+        log.warning(f"  ⚠ Could not read the instrument master ({exc}); skipping NAV.")
+        return {}
+
+
+def nav_by_isin() -> dict:
+    """
+    {ISIN: (nav, iso_date)} from AMFI's daily NAV file.
+
+    Note the redirect: the URL 302s, so redirects must be followed or you get a
+    169-byte "Document Moved" page instead of 1.6 MB of NAVs.
+    """
+    try:
+        response = requests.get(
+            AMFI_NAV_URL,
+            timeout=90,
+            allow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        response.raise_for_status()
+        out = {}
+        for line in response.text.splitlines():
+            parts = line.split(";")
+            if len(parts) < 6:
+                continue
+            try:
+                nav = float(parts[4].strip())
+            except ValueError:
+                continue          # header rows and section headings
+            if nav <= 0:
+                continue
+            iso = _amfi_date(parts[5].strip())
+            # Both ISIN columns (growth / reinvestment) point at the same scheme.
+            for isin in (parts[1].strip(), parts[2].strip()):
+                if isin and isin != "-":
+                    out[isin] = (nav, iso)
+        log.info(f"  AMFI NAV rows indexed: {len(out)}")
+        return out
+    except Exception as exc:
+        log.warning(f"  ⚠ Could not read AMFI NAVs ({exc}); prices will have no NAV.")
+        return {}
+
+
+def _amfi_date(raw: str):
+    """'05-Aug-2026' -> '2026-08-05'. None if unparseable."""
+    try:
+        return datetime.strptime(raw, "%d-%b-%Y").date().isoformat()
+    except ValueError:
+        return None
+
+
 def main() -> None:
     check_credentials()
 
@@ -152,7 +231,12 @@ def main() -> None:
         die("Yahoo returned no data at all. Try again later.")
     closes_frame = frame["Close"]
 
-    rows, skipped = [], []
+    # NAV lookup, for the premium-over-underlying check. Best-effort: if either
+    # source is unavailable the prices still get written, just without NAV.
+    isins = isin_map(symbols)
+    navs = nav_by_isin() if isins else {}
+
+    rows, skipped, no_nav = [], [], []
     now_iso = datetime.now(timezone.utc).isoformat()
 
     for symbol in symbols:
@@ -179,17 +263,29 @@ def main() -> None:
         if live is None:
             live = float(series.iloc[-1])
 
+        nav_value, nav_date = navs.get(isins.get(symbol, ""), (None, None))
+        if nav_value is None:
+            no_nav.append(symbol)
+
         rows.append({
             "symbol": symbol,
             "live_price": round(live, 4),
             "closes": [round(float(x), 4) for x in series],
             "last_bar": series.index[-1].date().isoformat(),
+            "nav": round(nav_value, 4) if nav_value is not None else None,
+            "nav_date": nav_date,
             "fetched_at": now_iso,
         })
-        log.info(f"  {symbol:<12} {len(series):>3} closes | live {live:.2f}")
+
+        premium = ""
+        if nav_value:
+            premium = f" | NAV {nav_value:.2f} ({(live - nav_value) / nav_value * 100:+.2f}%)"
+        log.info(f"  {symbol:<12} {len(series):>3} closes | live {live:.2f}{premium}")
 
     if skipped:
         log.warning(f"Skipped: {'; '.join(skipped)}")
+    if no_nav:
+        log.warning(f"No NAV found for: {', '.join(no_nav)} — premium check will be skipped for these.")
 
     if not rows:
         die("Nothing usable fetched — refusing to write. Leaving existing prices in place.")

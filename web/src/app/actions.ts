@@ -94,15 +94,33 @@ function friendly(error: { message: string; code?: string }): string {
 // ─────────────────────────────────────────────
 //  WATCHLIST
 // ─────────────────────────────────────────────
+/**
+ * Target allocation. Blank is meaningful — "no target", so this ETF scores on
+ * cheapness alone and contributes nothing to the allocation gap.
+ */
+function parseTarget(raw: FormDataEntryValue | null): number | null | "invalid" {
+  const text = String(raw ?? "").trim();
+  if (text === "") return null;
+  const value = Number(text);
+  if (!Number.isFinite(value) || value < 0 || value > 100) return "invalid";
+  return value;
+}
+
 export async function addWatchlistItem(formData: FormData): Promise<ActionResult> {
   const symbol = normaliseSymbol(formData.get("symbol"));
   const name = String(formData.get("name") ?? "").trim();
+  const target = parseTarget(formData.get("target_pct"));
 
   if (!symbol) return { ok: false, error: "Symbol is required." };
   if (!name) return { ok: false, error: "Name is required." };
+  if (target === "invalid") {
+    return { ok: false, error: "Target must be between 0 and 100, or left blank." };
+  }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("watchlist").insert({ symbol, name });
+  const { error } = await supabase
+    .from("watchlist")
+    .insert({ symbol, name, target_pct: target });
   if (error) return { ok: false, error: friendly(error) };
 
   revalidatePath("/watchlist");
@@ -113,10 +131,18 @@ export async function addWatchlistItem(formData: FormData): Promise<ActionResult
 export async function updateWatchlistItem(formData: FormData): Promise<ActionResult> {
   const symbol = normaliseSymbol(formData.get("symbol"));
   const name = String(formData.get("name") ?? "").trim();
+  const target = parseTarget(formData.get("target_pct"));
+
   if (!name) return { ok: false, error: "Name cannot be empty." };
+  if (target === "invalid") {
+    return { ok: false, error: "Target must be between 0 and 100, or left blank." };
+  }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("watchlist").update({ name }).eq("symbol", symbol);
+  const { error } = await supabase
+    .from("watchlist")
+    .update({ name, target_pct: target })
+    .eq("symbol", symbol);
   if (error) return { ok: false, error: friendly(error) };
 
   revalidatePath("/watchlist");
@@ -189,27 +215,57 @@ export async function deleteHolding(formData: FormData): Promise<ActionResult> {
 //  SETTINGS
 // ─────────────────────────────────────────────
 export async function updateSettings(formData: FormData): Promise<ActionResult> {
-  const budget = Number(String(formData.get("budget") ?? ""));
-  const maxWeightPct = Number(String(formData.get("max_weight_pct") ?? ""));
-  const limitBufferPct = Number(String(formData.get("limit_buffer_pct") ?? ""));
+  const num = (key: string) => Number(String(formData.get(key) ?? ""));
 
-  if (!Number.isFinite(budget) || budget <= 0) {
-    return { ok: false, error: "Budget must be a positive number." };
-  }
-  if (!Number.isFinite(maxWeightPct) || maxWeightPct <= 0 || maxWeightPct > 100) {
-    return { ok: false, error: "Concentration cap must be between 0 and 100." };
-  }
-  if (!Number.isFinite(limitBufferPct) || limitBufferPct < 0 || limitBufferPct > 5) {
-    return { ok: false, error: "Limit buffer must be between 0 and 5 percent." };
-  }
+  const budget = num("budget");
+  const limitBufferPct = num("limit_buffer_pct");
+  const gapWeight = num("gap_weight");
+  const maxPremiumPct = num("max_premium_pct");
+  const minCandles = num("min_candles");
+  const maxBarAgeDays = num("max_bar_age_days");
+  const maxNavAgeDays = num("max_nav_age_days");
+
+  const problems: Array<[boolean, string]> = [
+    [!Number.isFinite(budget) || budget <= 0, "Budget must be a positive number."],
+    [
+      !Number.isFinite(limitBufferPct) || limitBufferPct < 0 || limitBufferPct > 5,
+      "Limit buffer must be between 0 and 5 percent.",
+    ],
+    [
+      !Number.isFinite(gapWeight) || gapWeight < 0 || gapWeight > 20,
+      "Gap weight must be between 0 and 20.",
+    ],
+    [
+      !Number.isFinite(maxPremiumPct) || maxPremiumPct < 0 || maxPremiumPct > 50,
+      "Max premium must be between 0 and 50 percent.",
+    ],
+    [
+      !Number.isInteger(minCandles) || minCandles < 60 || minCandles > 500,
+      "Minimum history must be a whole number between 60 and 500 sessions.",
+    ],
+    [
+      !Number.isInteger(maxBarAgeDays) || maxBarAgeDays < 1 || maxBarAgeDays > 30,
+      "Max price age must be a whole number of days between 1 and 30.",
+    ],
+    [
+      !Number.isInteger(maxNavAgeDays) || maxNavAgeDays < 1 || maxNavAgeDays > 30,
+      "Max NAV age must be a whole number of days between 1 and 30.",
+    ],
+  ];
+  const firstProblem = problems.find(([bad]) => bad);
+  if (firstProblem) return { ok: false, error: firstProblem[1] };
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("settings")
     .update({
       budget,
-      max_weight_pct: maxWeightPct,
       limit_buffer_pct: limitBufferPct,
+      gap_weight: gapWeight,
+      max_premium_pct: maxPremiumPct,
+      min_candles: minCandles,
+      max_bar_age_days: maxBarAgeDays,
+      max_nav_age_days: maxNavAgeDays,
       updated_at: new Date().toISOString(),
     })
     .eq("id", 1);

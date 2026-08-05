@@ -71,8 +71,14 @@ import portfolio
 # ─────────────────────────────────────────────
 LIMIT_BUFFER_PCT = 0.20    # suggested limit sits this % above the live price
 NSE_TICK         = 0.01    # NSE cash-segment tick size
-MIN_CANDLES      = 100     # below this an ETF cannot be scored
-HISTORY_PERIOD   = "1y"    # how much daily history to pull
+# Cheapness is scored against a PRICE_WINDOW-session range, so demanding fewer
+# sessions than that means ranking a partial window against a full one. 252 is
+# the honest floor. (The web app makes this configurable and discounts the score
+# proportionally when it is lowered; this script simply requires it.)
+MIN_CANDLES      = 252
+# Must comfortably exceed MIN_CANDLES: "1y" yields only ~246 sessions, which
+# would fail the 252 requirement for every ETF.
+HISTORY_PERIOD   = "2y"
 
 PRICE_WINDOW    = 252      # trailing sessions for the price-position percentile
 HIGH_LOOKBACK   = 50       # sessions for the "recent high" used in the drawdown
@@ -236,7 +242,16 @@ def score_cheapness(closes: pd.Series, live_price: float) -> dict:
     price_pctile = float((recent < live_price).sum()) / len(recent) * 100
 
     # ── B. how unusual is today's dip for this ETF? ──
-    recent_high = max(float(closes.tail(look).max()), live_price)  # live can be a new high
+    # Window consistency matters here and was previously wrong.
+    # Each historical sample is max(closes[i-look+1 .. i]) — `look` observations
+    # INCLUDING closes[i]. The live price plays exactly the role closes[i] plays,
+    # so its window must also be `look` observations including itself: look - 1
+    # prior closes plus the live price. Using the last `look` closes plus the
+    # live price gave today a window of look + 1, making today's drawdown
+    # systematically deeper than the history it is ranked against and inflating
+    # every dip percentile.
+    prior = closes.tail(look - 1) if look > 1 else closes.iloc[0:0]
+    recent_high = max(float(prior.max()) if len(prior) else live_price, live_price)
     dd_now      = (recent_high - live_price) / recent_high * 100 if recent_high > 0 else 0.0
 
     roll_high = closes.rolling(look).max()

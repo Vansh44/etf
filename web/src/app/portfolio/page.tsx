@@ -109,7 +109,7 @@ export default async function PortfolioPage() {
             </ul>
 
             {/* Desktop table */}
-            <div className="hidden sm:block">
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr
