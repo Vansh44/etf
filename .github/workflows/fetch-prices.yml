@@ -1,0 +1,40 @@
+name: Fetch ETF prices
+
+# Yahoo blocks non-browser TLS fingerprints, so Vercel cannot fetch prices
+# itself. This job does it with Python + yfinance and writes to Supabase; the
+# web app only reads that table.
+
+on:
+  schedule:
+    # Every 30 minutes during NSE trading hours (09:15-15:30 IST = 03:45-10:00 UTC),
+    # Monday to Friday. Cron here is UTC.
+    - cron: "*/30 3-10 * * 1-5"
+    # One run after the close so the app shows settled end-of-day prices
+    # overnight (15:45 IST = 10:15 UTC).
+    - cron: "15 10 * * 1-5"
+  workflow_dispatch: # lets you trigger a refresh by hand from the Actions tab
+
+concurrency:
+  group: fetch-prices
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install yfinance requests
+
+      - name: Fetch prices and write to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python3 scripts/fetch_prices.py

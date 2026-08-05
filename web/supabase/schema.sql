@@ -1,0 +1,187 @@
+-- ============================================================================
+--  ETF ADVISOR — Supabase schema
+-- ============================================================================
+--  Run this once in the Supabase SQL editor (Dashboard -> SQL Editor -> New
+--  query -> paste -> Run). It is idempotent: safe to re-run.
+--
+--  SECURITY MODEL
+--  Access is gated on an email allowlist, enforced by Row Level Security in
+--  the database — NOT in the UI. Even if someone got your anon key and hit
+--  the REST API directly with a valid Google login, Postgres refuses every
+--  row unless their email is in allowed_emails.
+-- ============================================================================
+
+-- ─────────────────────────────────────────────
+--  ALLOWLIST
+-- ─────────────────────────────────────────────
+create table if not exists allowed_emails (
+  email    text primary key,
+  added_by text,
+  added_at timestamptz not null default now()
+);
+
+-- Seed the first allowed user. Without at least one row nobody can get in.
+insert into allowed_emails (email, added_by)
+values ('vansh.gupta@storemink.com', 'schema seed')
+on conflict (email) do nothing;
+
+-- Is the currently-logged-in user allowed?
+--
+-- SECURITY DEFINER so it can read allowed_emails while RLS is active on that
+-- table — otherwise the policies below would recurse into themselves.
+-- Emails are compared case-insensitively; Google can return mixed case.
+create or replace function public.is_allowed()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from allowed_emails
+    where lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+  );
+$$;
+
+revoke all on function public.is_allowed() from public;
+grant execute on function public.is_allowed() to authenticated;
+
+-- Refuse to remove the last allowed email — that would lock everyone out
+-- permanently, recoverable only from the SQL editor.
+create or replace function public.prevent_last_email_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if (select count(*) from allowed_emails) <= 1 then
+    raise exception 'Cannot remove the last allowed email — you would lock yourself out.';
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists trg_prevent_last_email_delete on allowed_emails;
+create trigger trg_prevent_last_email_delete
+  before delete on allowed_emails
+  for each row execute function public.prevent_last_email_delete();
+
+-- ─────────────────────────────────────────────
+--  WATCHLIST — ETFs the advisor may recommend
+-- ─────────────────────────────────────────────
+create table if not exists watchlist (
+  symbol     text primary key,
+  name       text not null,
+  created_at timestamptz not null default now(),
+  constraint watchlist_symbol_format
+    check (symbol = upper(symbol) and symbol !~ '\s' and length(symbol) between 1 and 30)
+);
+
+-- ─────────────────────────────────────────────
+--  HOLDINGS — what you own
+-- ─────────────────────────────────────────────
+--  Deliberately NO foreign key to watchlist: you hold ETFs that are not on
+--  the watchlist (gold, silver) and they must still count toward your
+--  portfolio total, or every other weight would be overstated.
+create table if not exists holdings (
+  symbol     text primary key,
+  units      integer not null default 0 check (units >= 0),
+  updated_at timestamptz not null default now(),
+  constraint holdings_symbol_format
+    check (symbol = upper(symbol) and symbol !~ '\s' and length(symbol) between 1 and 30)
+);
+
+-- ─────────────────────────────────────────────
+--  SETTINGS — single row
+-- ─────────────────────────────────────────────
+create table if not exists settings (
+  id              smallint primary key default 1 check (id = 1),
+  budget          numeric  not null default 2500 check (budget > 0),
+  max_weight_pct  numeric  not null default 40   check (max_weight_pct > 0 and max_weight_pct <= 100),
+  limit_buffer_pct numeric not null default 0.20 check (limit_buffer_pct >= 0 and limit_buffer_pct <= 5),
+  updated_at      timestamptz not null default now()
+);
+
+insert into settings (id) values (1) on conflict (id) do nothing;
+
+-- ─────────────────────────────────────────────
+--  PRICES — written by the GitHub Action, read by the app
+-- ─────────────────────────────────────────────
+--  Yahoo blocks non-browser TLS fingerprints, so Vercel cannot fetch prices
+--  itself (it gets HTTP 429). Instead a scheduled GitHub Action runs Python +
+--  yfinance, which impersonates Chrome's TLS via curl_cffi, and writes the
+--  results here. The web app only ever reads this table.
+create table if not exists prices (
+  symbol      text primary key,
+  live_price  numeric not null check (live_price > 0),
+  closes      jsonb   not null,   -- daily closes, oldest first
+  last_bar    date,
+  fetched_at  timestamptz not null default now()
+);
+
+-- ─────────────────────────────────────────────
+--  ROW LEVEL SECURITY
+-- ─────────────────────────────────────────────
+alter table allowed_emails enable row level security;
+alter table watchlist      enable row level security;
+alter table holdings       enable row level security;
+alter table settings       enable row level security;
+alter table prices         enable row level security;
+
+-- One policy per table covering every operation. `using` gates reads, updates
+-- and deletes; `with check` gates inserts and updates. Anonymous visitors match
+-- no policy at all, so they see nothing.
+drop policy if exists allowed_emails_allowed_only on allowed_emails;
+create policy allowed_emails_allowed_only on allowed_emails
+  for all to authenticated
+  using (public.is_allowed()) with check (public.is_allowed());
+
+drop policy if exists watchlist_allowed_only on watchlist;
+create policy watchlist_allowed_only on watchlist
+  for all to authenticated
+  using (public.is_allowed()) with check (public.is_allowed());
+
+drop policy if exists holdings_allowed_only on holdings;
+create policy holdings_allowed_only on holdings
+  for all to authenticated
+  using (public.is_allowed()) with check (public.is_allowed());
+
+drop policy if exists settings_allowed_only on settings;
+create policy settings_allowed_only on settings
+  for all to authenticated
+  using (public.is_allowed()) with check (public.is_allowed());
+
+-- Prices are READ-ONLY to the app. Only the GitHub Action writes them, using
+-- the service_role key, which bypasses RLS by design.
+drop policy if exists prices_allowed_read on prices;
+create policy prices_allowed_read on prices
+  for select to authenticated
+  using (public.is_allowed());
+
+-- ─────────────────────────────────────────────
+--  SEED (optional) — your current watchlist and holdings
+-- ─────────────────────────────────────────────
+--  Delete this block if you would rather start empty and add rows in the app.
+insert into watchlist (symbol, name) values
+  ('MOMIDMTM',  'Motilal Oswal Nifty Midcap 150 Momentum 50 ETF'),
+  ('ALPHA',     'Kotak Nifty Alpha 50 ETF'),
+  ('MODEFENCE', 'Motilal Oswal Nifty India Defence ETF'),
+  ('MAKEINDIA', 'Mirae Asset Nifty India Manufacturing ETF'),
+  ('BFSI',      'Mirae Asset Nifty Financial Services ETF'),
+  ('MON100',    'Motilal Oswal NASDAQ 100 ETF'),
+  ('INFRAIETF', 'ICICI Prudential Nifty Infrastructure ETF')
+on conflict (symbol) do nothing;
+
+insert into holdings (symbol, units) values
+  ('MOMIDMTM',  45),
+  ('ALPHA',     10),
+  ('MODEFENCE', 39),
+  ('MAKEINDIA', 12),
+  ('BFSI',       0),
+  ('MON100',     1),
+  ('INFRAIETF', 30),
+  ('GOLDBEES',  92),   -- held, not on the watchlist
+  ('SILVERBEES', 20)   -- held, not on the watchlist
+on conflict (symbol) do nothing;
