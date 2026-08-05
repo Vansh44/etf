@@ -108,7 +108,7 @@ export default async function SettingsPage() {
           </SubmitButton>
         </ActionForm>
 
-        <ul className="divide-y border-t" style={{ borderColor: "var(--hairline)" }}>
+        <ul className="rows border-t" style={{ borderColor: "var(--hairline)" }}>
           {emails.map((entry) => {
             const isMe = me?.toLowerCase() === entry.email.toLowerCase();
             return (

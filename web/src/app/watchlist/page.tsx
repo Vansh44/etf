@@ -63,7 +63,7 @@ export default async function WatchlistPage() {
         {items.length === 0 ? (
           <EmptyState title="No ETFs yet">Add one above to get started.</EmptyState>
         ) : (
-          <ul className="divide-y" style={{ borderColor: "var(--hairline)" }}>
+          <ul className="rows">
             {items.map((item) => (
               <li key={item.symbol} className="p-4 sm:px-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

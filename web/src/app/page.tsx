@@ -244,7 +244,7 @@ export default async function AdvisorPage() {
           />
 
           {/* Mobile: one card per ETF. Desktop: a table. */}
-          <ul className="divide-y sm:hidden" style={{ borderColor: "var(--hairline)" }}>
+          <ul className="rows sm:hidden">
             {ranked.map((r, i) => {
               const skip = skipped.find((s) => s.symbol === r.symbol);
               return (
@@ -336,7 +336,7 @@ export default async function AdvisorPage() {
             title="Not in the running"
             hint={`Under both the ${TREND_LONG}-day and ${TREND_SHORT}-day averages, or missing data.`}
           />
-          <ul className="divide-y" style={{ borderColor: "var(--hairline)" }}>
+          <ul className="rows">
             {discarded.map((d) => (
               <li key={d.symbol} className="px-4 py-3 sm:px-5">
                 <span className="text-sm font-medium">{d.symbol}</span>

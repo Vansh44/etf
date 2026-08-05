@@ -100,7 +100,7 @@ export default async function PortfolioPage() {
         ) : (
           <>
             {/* Mobile cards */}
-            <ul className="divide-y sm:hidden" style={{ borderColor: "var(--hairline)" }}>
+            <ul className="rows sm:hidden">
               {rows.map((row) => (
                 <li key={row.symbol} className="p-4">
                   <HoldingCard row={row} />
@@ -231,7 +231,7 @@ export default async function PortfolioPage() {
       {rows.length > 0 && (
         <Card>
           <CardHeader title="Edit" hint="Change units or average price, or remove a holding." />
-          <ul className="divide-y" style={{ borderColor: "var(--hairline)" }}>
+          <ul className="rows">
             {rows.map((row) => (
               <li
                 key={row.symbol}
