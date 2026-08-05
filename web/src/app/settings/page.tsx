@@ -3,8 +3,13 @@ import { getSessionEmail, isAllowed } from "@/lib/supabase/server";
 import { addAllowedEmail, removeAllowedEmail, updateSettings } from "@/app/actions";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { NotAllowedNotice } from "@/components/NotAllowedNotice";
+import { Card, CardHeader, Pill } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
+
+const input =
+  "w-40 min-h-11 rounded-xl border px-3 text-sm tnum bg-[var(--surface)] focus:outline-2 focus:outline-offset-1";
+const inputStyle = { borderColor: "var(--hairline)", outlineColor: "var(--accent)" };
 
 export default async function SettingsPage() {
   if (!(await isAllowed())) return <NotAllowedNotice />;
@@ -16,13 +21,11 @@ export default async function SettingsPage() {
   ]);
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
-      <h1 className="text-xl font-semibold">Settings</h1>
-
+    <main className="mx-auto max-w-3xl space-y-4 p-3 pb-16 sm:space-y-5 sm:p-6">
       {/* ── strategy settings ──────────────────────────────────── */}
-      <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="font-semibold">Strategy</h2>
-        <ActionForm action={updateSettings} className="mt-4 space-y-4">
+      <Card>
+        <CardHeader title="Strategy" hint="How much to spend and how concentrated to allow." />
+        <ActionForm action={updateSettings} className="space-y-4 p-4 sm:p-5">
           <Field
             label="Budget (Rs. per run)"
             hint="How much to spend each time. Nothing tracks how often you run it."
@@ -34,7 +37,8 @@ export default async function SettingsPage() {
               step="1"
               defaultValue={settings.budget}
               required
-              className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+              className={input}
+              style={inputStyle}
             />
           </Field>
 
@@ -50,7 +54,8 @@ export default async function SettingsPage() {
               step="1"
               defaultValue={settings.maxWeightPct}
               required
-              className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+              className={input}
+              style={inputStyle}
             />
           </Field>
 
@@ -66,48 +71,53 @@ export default async function SettingsPage() {
               step="0.05"
               defaultValue={settings.limitBufferPct}
               required
-              className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+              className={input}
+              style={inputStyle}
             />
           </Field>
 
-          <SubmitButton pendingText="Saving…">Save settings</SubmitButton>
+          <SubmitButton pendingText="Saving…" className="min-h-11">
+            Save settings
+          </SubmitButton>
         </ActionForm>
-      </section>
+      </Card>
 
       {/* ── allowlist ──────────────────────────────────────────── */}
-      <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="font-semibold">Who can sign in</h2>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          Only these Google accounts can access the app. Enforced in the database, so an
-          unlisted account that signs in successfully still sees nothing.
-        </p>
-
+      <Card>
+        <CardHeader
+          title="Who can sign in"
+          hint="Only these Google accounts can access the app. Enforced in the database, so an unlisted account that signs in successfully still sees nothing."
+        />
         <ActionForm
           action={addAllowedEmail}
           resetOnSuccess
-          className="mt-3 flex flex-col gap-2 sm:flex-row"
+          className="flex flex-col gap-2 p-4 sm:flex-row sm:p-5"
         >
           <input
             name="email"
             type="email"
+            inputMode="email"
             placeholder="someone@example.com"
             required
             autoComplete="off"
-            className="w-full flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+            className="min-h-11 w-full flex-1 rounded-xl border bg-[var(--surface)] px-3 text-sm focus:outline-2 focus:outline-offset-1"
+            style={inputStyle}
           />
-          <SubmitButton pendingText="Adding…">Allow</SubmitButton>
+          <SubmitButton pendingText="Adding…" className="min-h-11">
+            Allow
+          </SubmitButton>
         </ActionForm>
 
-        <ul className="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+        <ul className="divide-y border-t" style={{ borderColor: "var(--hairline)" }}>
           {emails.map((entry) => {
             const isMe = me?.toLowerCase() === entry.email.toLowerCase();
             return (
-              <li key={entry.email} className="flex items-center gap-3 py-2.5">
+              <li key={entry.email} className="flex items-center gap-3 px-4 py-3 sm:px-5">
                 <span className="flex-1 text-sm">
                   {entry.email}
                   {isMe && (
-                    <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                      you
+                    <span className="ml-2">
+                      <Pill>you</Pill>
                     </span>
                   )}
                 </span>
@@ -120,7 +130,7 @@ export default async function SettingsPage() {
                   }
                 >
                   <input type="hidden" name="email" value={entry.email} />
-                  <SubmitButton variant="danger" pendingText="Removing…">
+                  <SubmitButton variant="danger" pendingText="Removing…" className="min-h-11">
                     Revoke
                   </SubmitButton>
                 </ActionForm>
@@ -130,12 +140,15 @@ export default async function SettingsPage() {
         </ul>
 
         {emails.length === 1 && (
-          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+          <p
+            className="border-t px-4 py-3 text-xs sm:px-5"
+            style={{ borderColor: "var(--hairline)", color: "var(--ink-2)" }}
+          >
             This is the only allowed account. The database refuses to delete the last one, so you
             cannot lock yourself out entirely.
           </p>
         )}
-      </section>
+      </Card>
     </main>
   );
 }
@@ -152,7 +165,9 @@ function Field({
   return (
     <div>
       <label className="block text-sm font-medium">{label}</label>
-      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{hint}</p>
+      <p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>
+        {hint}
+      </p>
       <div className="mt-1.5">{children}</div>
     </div>
   );

@@ -3,84 +3,104 @@ import { isAllowed } from "@/lib/supabase/server";
 import { addWatchlistItem, deleteWatchlistItem, updateWatchlistItem } from "@/app/actions";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { NotAllowedNotice } from "@/components/NotAllowedNotice";
+import { Card, CardHeader, EmptyState } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
+
+const input =
+  "w-full min-h-11 rounded-xl border px-3 text-sm bg-[var(--surface)] focus:outline-2 focus:outline-offset-1";
+const inputStyle = { borderColor: "var(--hairline)", outlineColor: "var(--accent)" };
 
 export default async function WatchlistPage() {
   if (!(await isAllowed())) return <NotAllowedNotice />;
   const items = await getWatchlist();
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
-      <header>
-        <h1 className="text-xl font-semibold">Watchlist</h1>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          The ETFs the advisor is allowed to recommend. Use the exact NSE trading symbol — a wrong
-          symbol simply won&apos;t be found. Each needs about a year of trading history to be
-          scored.
-        </p>
-      </header>
-
-      <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-semibold">Add an ETF</h2>
-        <ActionForm
-          action={addWatchlistItem}
-          resetOnSuccess
-          className="mt-3 flex flex-col gap-2 sm:flex-row"
-        >
-          <input
-            name="symbol"
-            placeholder="SYMBOL e.g. GOLDBEES"
-            required
-            autoComplete="off"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm uppercase placeholder:normal-case dark:border-slate-700 dark:bg-slate-800 sm:w-56"
-          />
-          <input
-            name="name"
-            placeholder="Display name"
-            required
-            autoComplete="off"
-            className="w-full flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
-          />
-          <SubmitButton pendingText="Adding…">Add</SubmitButton>
-        </ActionForm>
-      </section>
-
-      <section className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
-        {items.length === 0 && (
-          <p className="p-6 text-center text-sm text-slate-500">
-            No ETFs yet. Add one above to get started.
-          </p>
-        )}
-
-        {items.map((item) => (
-          <div key={item.symbol} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center">
-            <span className="w-32 shrink-0 font-medium">{item.symbol}</span>
-
-            <ActionForm action={updateWatchlistItem} className="flex flex-1 gap-2">
-              <input type="hidden" name="symbol" value={item.symbol} />
+    <main className="mx-auto max-w-3xl space-y-4 p-3 pb-16 sm:space-y-5 sm:p-6">
+      <Card>
+        <CardHeader
+          title="Watchlist"
+          hint="The ETFs the advisor may recommend. Use exact NSE symbols — a wrong symbol simply won't be found. Each needs about a year of history to be scored."
+        />
+        <ActionForm action={addWatchlistItem} resetOnSuccess className="p-4 sm:p-5">
+          <div className="grid gap-3 sm:grid-cols-[13rem_1fr_auto] sm:items-end">
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium" style={{ color: "var(--ink-2)" }}>
+                NSE symbol
+              </span>
+              <input
+                name="symbol"
+                placeholder="GOLDBEES"
+                required
+                autoComplete="off"
+                autoCapitalize="characters"
+                className={`${input} uppercase placeholder:normal-case`}
+                style={inputStyle}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium" style={{ color: "var(--ink-2)" }}>
+                Display name
+              </span>
               <input
                 name="name"
-                defaultValue={item.name}
-                className="w-full flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
+                placeholder="Nippon India ETF Gold BeES"
+                required
+                autoComplete="off"
+                className={input}
+                style={inputStyle}
               />
-              <SubmitButton variant="ghost" pendingText="Saving…">
-                Save
-              </SubmitButton>
-            </ActionForm>
-
-            <ActionForm
-              action={deleteWatchlistItem}
-              confirm={`Remove ${item.symbol} from the watchlist? Your holdings are not affected.`}
-            >
-              <input type="hidden" name="symbol" value={item.symbol} />
-              <SubmitButton variant="danger" pendingText="Removing…">
-                Remove
-              </SubmitButton>
-            </ActionForm>
+            </label>
+            <SubmitButton pendingText="Adding…" className="min-h-11 w-full sm:w-auto">
+              Add
+            </SubmitButton>
           </div>
-        ))}
-      </section>
+        </ActionForm>
+      </Card>
+
+      <Card>
+        <CardHeader title={`${items.length} ETF${items.length === 1 ? "" : "s"} in the pool`} />
+        {items.length === 0 ? (
+          <EmptyState title="No ETFs yet">Add one above to get started.</EmptyState>
+        ) : (
+          <ul className="divide-y" style={{ borderColor: "var(--hairline)" }}>
+            {items.map((item) => (
+              <li key={item.symbol} className="p-4 sm:px-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <span className="w-32 shrink-0 font-medium">{item.symbol}</span>
+
+                  <ActionForm
+                    action={updateWatchlistItem}
+                    className="flex flex-1 items-center gap-2"
+                  >
+                    <input type="hidden" name="symbol" value={item.symbol} />
+                    <input
+                      name="name"
+                      defaultValue={item.name}
+                      aria-label={`Display name for ${item.symbol}`}
+                      className={input}
+                      style={inputStyle}
+                    />
+                    <SubmitButton variant="ghost" pendingText="…" className="min-h-11 shrink-0">
+                      Save
+                    </SubmitButton>
+                  </ActionForm>
+
+                  <ActionForm
+                    action={deleteWatchlistItem}
+                    confirm={`Remove ${item.symbol} from the watchlist? Your holdings are not affected.`}
+                  >
+                    <input type="hidden" name="symbol" value={item.symbol} />
+                    <SubmitButton variant="danger" pendingText="…" className="min-h-11">
+                      Remove
+                    </SubmitButton>
+                  </ActionForm>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </main>
   );
 }

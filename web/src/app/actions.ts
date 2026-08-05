@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { dispatchPriceFetch } from "@/lib/github";
 
 /**
  * Server Actions for every write. All go through the anon-key client, so the
@@ -10,6 +11,63 @@ import { createClient } from "@/lib/supabase/server";
  */
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
+
+// ─────────────────────────────────────────────
+//  RUN THE ADVISOR
+// ─────────────────────────────────────────────
+export type RunState =
+  | { phase: "idle" }
+  | { phase: "fetching"; since: string | null; note?: string }
+  | { phase: "ready"; note?: string }
+  | { phase: "error"; error: string };
+
+/**
+ * Kick off a price refresh. Returns immediately with the timestamp of the
+ * prices we had BEFORE dispatching, so the client can poll until it changes.
+ */
+export async function startRun(): Promise<RunState> {
+  const supabase = await createClient();
+
+  const { data: allowed } = await supabase.rpc("is_allowed");
+  if (allowed !== true) return { phase: "error", error: "Your account is not allowed." };
+
+  const { data } = await supabase
+    .from("prices")
+    .select("fetched_at")
+    .order("fetched_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const since: string | null = data?.fetched_at ?? null;
+
+  const outcome = await dispatchPriceFetch();
+
+  if (outcome.status === "dispatched") return { phase: "fetching", since };
+  if (outcome.status === "not-configured") {
+    // No GitHub token: nothing to wait for, just re-score what's stored.
+    revalidatePath("/");
+    return { phase: "ready", note: outcome.detail };
+  }
+  return { phase: "error", error: outcome.detail };
+}
+
+/**
+ * Has the fetcher written newer prices than `since`?
+ * Polled by the client while a run is in flight.
+ */
+export async function checkRun(since: string | null): Promise<{ fresh: boolean; at: string | null }> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("prices")
+    .select("fetched_at")
+    .order("fetched_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const at: string | null = data?.fetched_at ?? null;
+  const fresh = at !== null && (since === null || Date.parse(at) > Date.parse(since));
+  if (fresh) revalidatePath("/");
+  return { fresh, at };
+}
 
 
 /** NSE symbols are uppercase with no spaces. Normalise before it hits Postgres. */
@@ -84,6 +142,7 @@ export async function deleteWatchlistItem(formData: FormData): Promise<ActionRes
 export async function upsertHolding(formData: FormData): Promise<ActionResult> {
   const symbol = normaliseSymbol(formData.get("symbol"));
   const unitsRaw = String(formData.get("units") ?? "").trim();
+  const avgRaw = String(formData.get("avg_price") ?? "").trim();
 
   if (!symbol) return { ok: false, error: "Symbol is required." };
 
@@ -92,10 +151,21 @@ export async function upsertHolding(formData: FormData): Promise<ActionResult> {
     return { ok: false, error: "Units must be a whole number of 0 or more." };
   }
 
+  // Blank is meaningful: "I don't know my cost basis". Stored as null, and the
+  // UI then shows "—" for invested and P&L instead of inventing a number.
+  let avgPrice: number | null = null;
+  if (avgRaw !== "") {
+    avgPrice = Number(avgRaw);
+    if (!Number.isFinite(avgPrice) || avgPrice <= 0) {
+      return { ok: false, error: "Average price must be a positive number, or left blank." };
+    }
+  }
+
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("holdings")
-    .upsert({ symbol, units, updated_at: new Date().toISOString() }, { onConflict: "symbol" });
+  const { error } = await supabase.from("holdings").upsert(
+    { symbol, units, avg_price: avgPrice, updated_at: new Date().toISOString() },
+    { onConflict: "symbol" },
+  );
   if (error) return { ok: false, error: friendly(error) };
 
   revalidatePath("/portfolio");

@@ -88,10 +88,22 @@ create table if not exists watchlist (
 create table if not exists holdings (
   symbol     text primary key,
   units      integer not null default 0 check (units >= 0),
+  -- Average price paid per unit. Nullable: you may not know it for older
+  -- holdings, and the app shows "—" for invested/P&L rather than guessing.
+  avg_price  numeric check (avg_price is null or avg_price > 0),
   updated_at timestamptz not null default now(),
   constraint holdings_symbol_format
     check (symbol = upper(symbol) and symbol !~ '\s' and length(symbol) between 1 and 30)
 );
+
+-- Safe to re-run on an existing database that predates avg_price.
+alter table holdings add column if not exists avg_price numeric;
+do $$
+begin
+  alter table holdings add constraint holdings_avg_price_positive
+    check (avg_price is null or avg_price > 0);
+exception when duplicate_object then null;
+end $$;
 
 -- ─────────────────────────────────────────────
 --  SETTINGS — single row
@@ -174,14 +186,25 @@ insert into watchlist (symbol, name) values
   ('INFRAIETF', 'ICICI Prudential Nifty Infrastructure ETF')
 on conflict (symbol) do nothing;
 
-insert into holdings (symbol, units) values
-  ('MOMIDMTM',  45),
-  ('ALPHA',     10),
-  ('MODEFENCE', 39),
-  ('MAKEINDIA', 12),
-  ('BFSI',       0),
-  ('MON100',     1),
-  ('INFRAIETF', 30),
-  ('GOLDBEES',  92),   -- held, not on the watchlist
-  ('SILVERBEES', 20)   -- held, not on the watchlist
+-- Units and average buy price, as reported by the Groww holdings endpoint.
+insert into holdings (symbol, units, avg_price) values
+  ('MOMIDMTM',  45,  62.61),
+  ('ALPHA',     10,  49.18),
+  ('MODEFENCE', 39,  98.33),
+  ('MAKEINDIA', 12, 158.06),
+  ('BFSI',       0,  null),
+  ('MON100',     1, 285.94),
+  ('INFRAIETF', 30,  96.88),
+  ('GOLDBEES',  92, 119.06),   -- held, not on the watchlist
+  ('SILVERBEES', 20, 210.40)   -- held, not on the watchlist
 on conflict (symbol) do nothing;
+
+-- If your holdings rows already exist from an earlier run, this fills in the
+-- average prices without touching your unit counts.
+update holdings h set avg_price = v.avg_price
+from (values
+  ('MOMIDMTM',  62.61), ('ALPHA',     49.18), ('MODEFENCE',  98.33),
+  ('MAKEINDIA', 158.06), ('MON100',  285.94), ('INFRAIETF',  96.88),
+  ('GOLDBEES',  119.06), ('SILVERBEES', 210.40)
+) as v(symbol, avg_price)
+where h.symbol = v.symbol and h.avg_price is null;

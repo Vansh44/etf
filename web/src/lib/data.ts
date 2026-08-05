@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 
 export type WatchlistItem = { symbol: string; name: string };
-export type Holding = { symbol: string; units: number };
+export type Holding = { symbol: string; units: number; avgPrice: number | null };
 export type Settings = { budget: number; maxWeightPct: number; limitBufferPct: number };
 export type AllowedEmail = { email: string; added_by: string | null; added_at: string };
 
@@ -19,8 +19,17 @@ export async function getWatchlist(): Promise<WatchlistItem[]> {
 
 export async function getHoldings(): Promise<Holding[]> {
   const supabase = await createClient();
-  const { data } = await supabase.from("holdings").select("symbol, units").order("symbol");
-  return data ?? [];
+  const { data } = await supabase
+    .from("holdings")
+    .select("symbol, units, avg_price")
+    .order("symbol");
+
+  return (data ?? []).map((row) => ({
+    symbol: row.symbol as string,
+    units: Number(row.units),
+    // numeric comes back as a string from PostgREST; null means "cost basis unknown".
+    avgPrice: row.avg_price === null ? null : Number(row.avg_price),
+  }));
 }
 
 export async function getSettings(): Promise<Settings> {

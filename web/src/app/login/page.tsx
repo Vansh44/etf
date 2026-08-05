@@ -28,17 +28,31 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center p-6">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-          ETF Advisor
-        </h1>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+    <main className="flex min-h-dvh items-center justify-center p-4">
+      <div
+        className="w-full max-w-sm rounded-2xl border p-6 sm:p-8"
+        style={{ borderColor: "var(--hairline)", background: "var(--surface)" }}
+      >
+        <div className="flex items-center gap-2">
+          <span
+            className="grid h-8 w-8 place-items-center rounded-lg text-sm font-bold"
+            style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
+            aria-hidden="true"
+          >
+            ₹
+          </span>
+          <h1 className="text-lg font-semibold">ETF Advisor</h1>
+        </div>
+
+        <p className="mt-3 text-sm" style={{ color: "var(--ink-2)" }}>
           Sign in with Google. Only allow-listed email addresses can get in.
         </p>
 
         {error && (
-          <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+          <p
+            className="mt-4 rounded-xl px-3 py-2.5 text-sm font-medium"
+            style={{ background: "var(--loss-soft)", color: "var(--loss)" }}
+          >
             {error}
           </p>
         )}
@@ -46,7 +60,8 @@ export default function LoginPage() {
         <button
           onClick={signIn}
           disabled={busy}
-          className="mt-6 flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          className="mt-6 flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border text-sm font-medium transition disabled:opacity-60"
+          style={{ borderColor: "var(--hairline)" }}
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
             <path
