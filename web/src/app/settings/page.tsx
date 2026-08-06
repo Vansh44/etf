@@ -7,8 +7,9 @@ import { Card, CardHeader, Pill } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
+// One fixed width, no conflicting utilities appended anywhere.
 const input =
-  "w-40 min-h-11 rounded-xl border px-3 text-sm tnum bg-[var(--surface)] focus:outline-2 focus:outline-offset-1";
+  "w-full max-w-40 min-h-11 rounded-xl border px-3 text-sm tnum bg-[var(--surface)] focus:outline-2 focus:outline-offset-1";
 const inputStyle = { borderColor: "var(--hairline)", outlineColor: "var(--accent)" };
 
 export default async function SettingsPage() {

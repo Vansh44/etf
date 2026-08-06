@@ -19,8 +19,13 @@ import {
 
 export const dynamic = "force-dynamic";
 
+// Deliberately NO width here. Appending `w-20` to a base containing `w-full`
+// puts two same-specificity Tailwind utilities in conflict, and class-string
+// order does not decide the winner — the stylesheet's order does. `w-full` won,
+// which made the target field take the whole row and collapsed the name field.
+// Every use below sets its own width.
 const input =
-  "w-full min-h-11 rounded-xl border px-3 text-sm bg-[var(--surface)] focus:outline-2 focus:outline-offset-1";
+  "min-h-11 rounded-xl border px-3 text-sm bg-[var(--surface)] focus:outline-2 focus:outline-offset-1";
 const inputStyle = { borderColor: "var(--hairline)", outlineColor: "var(--accent)" };
 
 export default async function PortfolioPage() {
@@ -185,7 +190,7 @@ export default async function PortfolioPage() {
                 required
                 autoComplete="off"
                 autoCapitalize="characters"
-                className={`${input} uppercase placeholder:normal-case`}
+                className={`${input} w-full uppercase placeholder:normal-case`}
                 style={inputStyle}
               />
             </label>
@@ -201,7 +206,7 @@ export default async function PortfolioPage() {
                 step="1"
                 placeholder="0"
                 required
-                className={`${input} tnum`}
+                className={`${input} tnum w-full`}
                 style={inputStyle}
               />
             </label>
@@ -216,7 +221,7 @@ export default async function PortfolioPage() {
                 min="0"
                 step="0.01"
                 placeholder="optional"
-                className={`${input} tnum`}
+                className={`${input} tnum w-full`}
                 style={inputStyle}
               />
             </label>
@@ -251,7 +256,7 @@ export default async function PortfolioPage() {
                       min="0"
                       step="1"
                       defaultValue={row.units}
-                      className={`${input} tnum w-24`}
+                      className={`${input} tnum w-full sm:w-24`}
                       style={inputStyle}
                     />
                   </label>
@@ -267,7 +272,7 @@ export default async function PortfolioPage() {
                       step="0.01"
                       defaultValue={row.avgPrice ?? ""}
                       placeholder="—"
-                      className={`${input} tnum w-28`}
+                      className={`${input} tnum w-full sm:w-28`}
                       style={inputStyle}
                     />
                   </label>

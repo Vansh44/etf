@@ -7,8 +7,13 @@ import { Card, CardHeader, EmptyState, Pill } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
+// Deliberately NO width here. Appending `w-20` to a base containing `w-full`
+// puts two same-specificity Tailwind utilities in conflict, and class-string
+// order does not decide the winner — the stylesheet's order does. `w-full` won,
+// which made the target field take the whole row and collapsed the name field.
+// Every use below sets its own width.
 const input =
-  "w-full min-h-11 rounded-xl border px-3 text-sm bg-[var(--surface)] focus:outline-2 focus:outline-offset-1";
+  "min-h-11 rounded-xl border px-3 text-sm bg-[var(--surface)] focus:outline-2 focus:outline-offset-1";
 const inputStyle = { borderColor: "var(--hairline)", outlineColor: "var(--accent)" };
 
 export default async function WatchlistPage() {
@@ -36,7 +41,7 @@ export default async function WatchlistPage() {
                 required
                 autoComplete="off"
                 autoCapitalize="characters"
-                className={`${input} uppercase placeholder:normal-case`}
+                className={`${input} w-full uppercase placeholder:normal-case`}
                 style={inputStyle}
               />
             </label>
@@ -49,7 +54,7 @@ export default async function WatchlistPage() {
                 placeholder="Nippon India ETF Gold BeES"
                 required
                 autoComplete="off"
-                className={input}
+                className={`${input} w-full`}
                 style={inputStyle}
               />
             </label>
@@ -65,7 +70,7 @@ export default async function WatchlistPage() {
                 max="100"
                 step="0.5"
                 placeholder="optional"
-                className={`${input} tnum`}
+                className={`${input} tnum w-full`}
                 style={inputStyle}
               />
             </label>
@@ -93,45 +98,67 @@ export default async function WatchlistPage() {
           <ul className="rows">
             {items.map((item) => (
               <li key={item.symbol} className="p-4 sm:px-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <span className="w-32 shrink-0 font-medium">{item.symbol}</span>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <span className="font-semibold sm:w-28 sm:shrink-0 sm:pb-2.5">
+                    {item.symbol}
+                  </span>
 
                   <ActionForm
                     action={updateWatchlistItem}
-                    className="flex flex-1 items-center gap-2"
+                    className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-end"
                   >
                     <input type="hidden" name="symbol" value={item.symbol} />
-                    <input
-                      name="name"
-                      defaultValue={item.name}
-                      aria-label={`Display name for ${item.symbol}`}
-                      className={input}
-                      style={inputStyle}
-                    />
-                    <input
-                      name="target_pct"
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      max="100"
-                      step="0.5"
-                      defaultValue={item.targetPct ?? ""}
-                      placeholder="—"
-                      aria-label={`Target percent for ${item.symbol}`}
-                      className={`${input} tnum w-20 shrink-0`}
-                      style={inputStyle}
-                    />
-                    <SubmitButton variant="ghost" pendingText="…" className="min-h-11 shrink-0">
+
+                    <label className="block min-w-0 flex-1">
+                      <span
+                        className="mb-1 block text-xs sm:hidden"
+                        style={{ color: "var(--ink-2)" }}
+                      >
+                        Display name
+                      </span>
+                      <input
+                        name="name"
+                        defaultValue={item.name}
+                        aria-label={`Display name for ${item.symbol}`}
+                        className={`${input} w-full`}
+                        style={inputStyle}
+                      />
+                    </label>
+
+                    <label className="block sm:shrink-0">
+                      <span
+                        className="mb-1 block text-xs sm:hidden"
+                        style={{ color: "var(--ink-2)" }}
+                      >
+                        Target %
+                      </span>
+                      <input
+                        name="target_pct"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        defaultValue={item.targetPct ?? ""}
+                        placeholder="—"
+                        aria-label={`Target percent for ${item.symbol}`}
+                        className={`${input} tnum w-full sm:w-20`}
+                        style={inputStyle}
+                      />
+                    </label>
+
+                    <SubmitButton variant="ghost" pendingText="…" className="min-h-11 sm:shrink-0">
                       Save
                     </SubmitButton>
                   </ActionForm>
 
                   <ActionForm
                     action={deleteWatchlistItem}
+                    className="sm:shrink-0"
                     confirm={`Remove ${item.symbol} from the watchlist? Your holdings are not affected.`}
                   >
                     <input type="hidden" name="symbol" value={item.symbol} />
-                    <SubmitButton variant="danger" pendingText="…" className="min-h-11">
+                    <SubmitButton variant="danger" pendingText="…" className="min-h-11 w-full">
                       Remove
                     </SubmitButton>
                   </ActionForm>
