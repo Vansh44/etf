@@ -61,8 +61,25 @@ export default async function SettingsPage() {
           </Field>
 
           <Field
+            label="Gap knee (pp)"
+            hint="Allocation drift beyond this many percentage points stops being a linear penalty and turns quadratic, so extreme overweights price themselves out without a hard cap."
+          >
+            <input
+              name="gap_knee_pct"
+              type="number"
+              min="1"
+              max="50"
+              step="0.5"
+              defaultValue={settings.gapKneePct}
+              required
+              className={input}
+              style={inputStyle}
+            />
+          </Field>
+
+          <Field
             label="Max premium over NAV (%)"
-            hint="Refuse an ETF trading this far above the value of its holdings. International ETFs can run to +16% when funds hit the SEBI overseas cap."
+            hint="Absolute backstop: refuse an ETF trading this far above the value of its holdings, whatever its own history says. International ETFs can run to +16% when funds hit the SEBI overseas cap."
           >
             <input
               name="max_premium_pct"
@@ -71,6 +88,40 @@ export default async function SettingsPage() {
               max="50"
               step="0.1"
               defaultValue={settings.maxPremiumPct}
+              required
+              className={input}
+              style={inputStyle}
+            />
+          </Field>
+
+          <Field
+            label="Premium noise floor (%)"
+            hint="Premiums at or below this are never gated. Stops the percentile test firing on a 0.2% premium that happens to be unusual for a tight-tracking ETF."
+          >
+            <input
+              name="premium_floor_pct"
+              type="number"
+              min="0"
+              max="5"
+              step="0.05"
+              defaultValue={settings.premiumFloorPct}
+              required
+              className={input}
+              style={inputStyle}
+            />
+          </Field>
+
+          <Field
+            label="Max premium percentile"
+            hint="Discard when today's premium ranks above this percentile of the ETF's own trailing premiums. Self-calibrating, so each ETF is judged against its own baseline. Needs the fetcher to publish a premium history — dormant until then."
+          >
+            <input
+              name="max_premium_pctile"
+              type="number"
+              min="50"
+              max="100"
+              step="1"
+              defaultValue={settings.maxPremiumPctile}
               required
               className={input}
               style={inputStyle}
@@ -95,16 +146,16 @@ export default async function SettingsPage() {
           </Field>
 
           <Field
-            label="Max price age (days)"
-            hint="Refuse to recommend anything if the newest price is older than this — it means the fetcher missed a trading session."
+            label="Max price lag (sessions)"
+            hint="Refuse to recommend anything if the newest bar is this many NSE sessions behind the last completed session. Counted in sessions, not days, so weekends and holidays no longer trip it. 1 gives a session of slack for a missing holiday entry below; set 0 once that list is trusted."
           >
             <input
-              name="max_bar_age_days"
+              name="max_bar_age_sessions"
               type="number"
-              min="1"
-              max="30"
+              min="0"
+              max="5"
               step="1"
-              defaultValue={settings.maxBarAgeDays}
+              defaultValue={settings.maxBarAgeSessions}
               required
               className={input}
               style={inputStyle}
@@ -124,6 +175,37 @@ export default async function SettingsPage() {
               defaultValue={settings.maxNavAgeDays}
               required
               className={input}
+              style={inputStyle}
+            />
+          </Field>
+
+          <Field
+            label="Max iNAV age (minutes)"
+            hint="Ignore an intraday iNAV struck longer ago than this and fall back to the end-of-day NAV. Dormant until the fetcher publishes iNAV."
+          >
+            <input
+              name="max_inav_age_minutes"
+              type="number"
+              min="5"
+              max="1440"
+              step="5"
+              defaultValue={settings.maxInavAgeMinutes}
+              required
+              className={input}
+              style={inputStyle}
+            />
+          </Field>
+
+          <Field
+            label="NSE holidays"
+            hint="One ISO date (yyyy-mm-dd) per line, from the NSE holiday circular. A missing entry makes the app think a session was skipped and can block a run."
+          >
+            <textarea
+              name="nse_holidays"
+              rows={4}
+              defaultValue={settings.nseHolidays.join("\n")}
+              placeholder="2026-01-26"
+              className="w-full max-w-64 rounded-xl border bg-[var(--surface)] p-3 text-sm tnum focus:outline-2 focus:outline-offset-1"
               style={inputStyle}
             />
           </Field>

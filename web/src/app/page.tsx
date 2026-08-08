@@ -198,21 +198,26 @@ export default async function AdvisorPage() {
               <dl className="mt-3">
                 <DefRow k="Trend" v={pick.detail} />
                 <DefRow
-                  k="NAV"
+                  k={pick.premiumSource === "inav" ? "iNAV" : "NAV"}
                   v={
                     pick.premiumPct !== null ? (
                       <span>
-                        Rs.{rupee(pick.nav!)} — trading{" "}
+                        Rs.{rupee(pick.referenceValue!)} — trading{" "}
                         <strong>{pick.premiumPct >= 0 ? "+" : "−"}
                         {Math.abs(pick.premiumPct).toFixed(2)}%</strong>{" "}
                         vs underlying (limit {settings.maxPremiumPct}%)
-                        {pick.navAgeDays !== null && pick.navAgeDays > 0 && (
-                          <> · NAV {pick.navAgeDays}d old</>
+                        {pick.premiumPctile !== null && (
+                          <>
+                            {" "}
+                            · {pick.premiumPctile.toFixed(0)}th percentile of its own{" "}
+                            {pick.premiumSamples} sessions
+                          </>
                         )}
+                        {pick.referenceAt && <> · struck {pick.referenceAt.slice(0, 10)}</>}
                       </span>
                     ) : (
                       <span style={{ color: "var(--ink-2)" }}>
-                        not checked — {pick.unavailable}
+                        not checked — {pick.premiumUnavailable}
                       </span>
                     )
                   }

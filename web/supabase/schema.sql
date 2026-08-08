@@ -269,3 +269,68 @@ from (values
   ('MON100',   10)
 ) as v(symbol, target)
 where w.symbol = v.symbol and w.target_pct is null;
+
+
+-- ============================================================================
+--  MIGRATION — session-based staleness, shaped gap penalty, premium percentile
+--  Safe to re-run. Apply by pasting this whole file again.
+--
+--  RUN THIS BEFORE DEPLOYING the strategy rewrite. Until it is applied,
+--  getSettings() falls back to the built-in defaults (safe) and saving on the
+--  Settings page fails with a column error (visible, not silent).
+-- ============================================================================
+
+-- ─── Staleness is now counted in NSE sessions, not calendar days ────────────
+-- Calendar days false-blocked after every weekend and holiday. The app now
+-- walks the NSE calendar, so the tolerance is a session count and 1 is plenty.
+alter table settings add column if not exists max_bar_age_sessions integer not null default 1;
+alter table settings drop column if exists max_bar_age_days;
+do $$ begin
+  alter table settings add constraint settings_bar_age_sessions_range
+    check (max_bar_age_sessions >= 0 and max_bar_age_sessions <= 5);
+exception when duplicate_object then null; end $$;
+
+-- ─── NSE trading holidays, so session maths knows which days do not exist ───
+-- JSON array of ISO dates, e.g. '["2026-01-26","2026-03-04"]'. Keep it current
+-- from the NSE holiday circular: a missing entry makes the app believe a
+-- session was skipped. Editable on the Settings page.
+alter table settings add column if not exists nse_holidays jsonb not null default '[]'::jsonb;
+do $$ begin
+  alter table settings add constraint settings_nse_holidays_is_array
+    check (jsonb_typeof(nse_holidays) = 'array');
+exception when duplicate_object then null; end $$;
+
+-- ─── Allocation gap: linear inside the knee, quadratic outside ──────────────
+alter table settings add column if not exists gap_knee_pct numeric not null default 5;
+do $$ begin
+  alter table settings add constraint settings_gap_knee_range
+    check (gap_knee_pct >= 1 and gap_knee_pct <= 50);
+exception when duplicate_object then null; end $$;
+
+-- ─── Premium: an absolute cap plus a self-calibrating percentile ────────────
+-- Every ETF has its own baseline premium, so a single fixed threshold is either
+-- too loose for NIFTYBEES or too tight for a capped international fund. The
+-- percentile ranks today's premium against the ETF's own history; the floor
+-- stops it firing on harmless noise.
+alter table settings add column if not exists premium_floor_pct    numeric not null default 0.75;
+alter table settings add column if not exists max_premium_pctile   numeric not null default 90;
+alter table settings add column if not exists max_inav_age_minutes integer not null default 120;
+do $$ begin
+  alter table settings add constraint settings_premium_floor_range
+    check (premium_floor_pct >= 0 and premium_floor_pct <= 5);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table settings add constraint settings_premium_pctile_range
+    check (max_premium_pctile >= 50 and max_premium_pctile <= 100);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table settings add constraint settings_inav_age_range
+    check (max_inav_age_minutes >= 5 and max_inav_age_minutes <= 1440);
+exception when duplicate_object then null; end $$;
+
+-- The old defaults predate the rewrite: gap_weight 1.0 and max_premium_pct 1.5
+-- were tuned against a linear gap term and a fixed premium gate. Move the
+-- single settings row onto the new defaults, but only where it still holds the
+-- old ones, so a deliberately tuned value is never overwritten.
+update settings set gap_weight      = 1.5 where id = 1 and gap_weight      = 1.0;
+update settings set max_premium_pct = 3.0 where id = 1 and max_premium_pct = 1.5;

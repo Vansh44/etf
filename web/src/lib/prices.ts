@@ -54,6 +54,16 @@ export async function getPrices(symbols: string[]): Promise<PriceLoad> {
       lastBar: row.last_bar,
       nav: nav !== null && Number.isFinite(nav) && nav > 0 ? nav : null,
       navDate: row.nav_date,
+
+      // The fetcher publishes EOD NAV only — no intraday iNAV and no trailing
+      // premium series yet. Both are optional inputs: with them absent the
+      // premium check falls back to EOD NAV and the percentile gate stays
+      // quiet, which is exactly what it did before. Wire these up in
+      // scripts/fetch_prices.py to switch the stronger checks on.
+      inav: null,
+      inavAt: null,
+      premiumHistory: [],
+
       fetchedAt: row.fetched_at,
     });
   }

@@ -220,10 +220,23 @@ export async function updateSettings(formData: FormData): Promise<ActionResult> 
   const budget = num("budget");
   const limitBufferPct = num("limit_buffer_pct");
   const gapWeight = num("gap_weight");
+  const gapKneePct = num("gap_knee_pct");
   const maxPremiumPct = num("max_premium_pct");
+  const premiumFloorPct = num("premium_floor_pct");
+  const maxPremiumPctile = num("max_premium_pctile");
   const minCandles = num("min_candles");
-  const maxBarAgeDays = num("max_bar_age_days");
+  const maxBarAgeSessions = num("max_bar_age_sessions");
   const maxNavAgeDays = num("max_nav_age_days");
+  const maxInavAgeMinutes = num("max_inav_age_minutes");
+
+  // One ISO date per line. Anything else is rejected rather than dropped: a
+  // silently ignored line would turn a real holiday into an expected session.
+  const holidayLines = String(formData.get("nse_holidays") ?? "")
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const badHoliday = holidayLines.find((d) => !/^\d{4}-\d{2}-\d{2}$/.test(d));
+  const nseHolidays = Array.from(new Set(holidayLines)).sort();
 
   const problems: Array<[boolean, string]> = [
     [!Number.isFinite(budget) || budget <= 0, "Budget must be a positive number."],
@@ -236,20 +249,40 @@ export async function updateSettings(formData: FormData): Promise<ActionResult> 
       "Gap weight must be between 0 and 20.",
     ],
     [
+      !Number.isFinite(gapKneePct) || gapKneePct < 1 || gapKneePct > 50,
+      "Gap knee must be between 1 and 50 percentage points.",
+    ],
+    [
       !Number.isFinite(maxPremiumPct) || maxPremiumPct < 0 || maxPremiumPct > 50,
       "Max premium must be between 0 and 50 percent.",
+    ],
+    [
+      !Number.isFinite(premiumFloorPct) || premiumFloorPct < 0 || premiumFloorPct > 5,
+      "Premium noise floor must be between 0 and 5 percent.",
+    ],
+    [
+      !Number.isFinite(maxPremiumPctile) || maxPremiumPctile < 50 || maxPremiumPctile > 100,
+      "Max premium percentile must be between 50 and 100.",
     ],
     [
       !Number.isInteger(minCandles) || minCandles < 60 || minCandles > 500,
       "Minimum history must be a whole number between 60 and 500 sessions.",
     ],
     [
-      !Number.isInteger(maxBarAgeDays) || maxBarAgeDays < 1 || maxBarAgeDays > 30,
-      "Max price age must be a whole number of days between 1 and 30.",
+      !Number.isInteger(maxBarAgeSessions) || maxBarAgeSessions < 0 || maxBarAgeSessions > 5,
+      "Max price lag must be a whole number of sessions between 0 and 5.",
     ],
     [
       !Number.isInteger(maxNavAgeDays) || maxNavAgeDays < 1 || maxNavAgeDays > 30,
       "Max NAV age must be a whole number of days between 1 and 30.",
+    ],
+    [
+      !Number.isInteger(maxInavAgeMinutes) || maxInavAgeMinutes < 5 || maxInavAgeMinutes > 1440,
+      "Max iNAV age must be a whole number of minutes between 5 and 1440.",
+    ],
+    [
+      badHoliday !== undefined,
+      `"${badHoliday}" is not an ISO date — NSE holidays must be yyyy-mm-dd, one per line.`,
     ],
   ];
   const firstProblem = problems.find(([bad]) => bad);
@@ -262,10 +295,15 @@ export async function updateSettings(formData: FormData): Promise<ActionResult> 
       budget,
       limit_buffer_pct: limitBufferPct,
       gap_weight: gapWeight,
+      gap_knee_pct: gapKneePct,
       max_premium_pct: maxPremiumPct,
+      premium_floor_pct: premiumFloorPct,
+      max_premium_pctile: maxPremiumPctile,
       min_candles: minCandles,
-      max_bar_age_days: maxBarAgeDays,
+      max_bar_age_sessions: maxBarAgeSessions,
       max_nav_age_days: maxNavAgeDays,
+      max_inav_age_minutes: maxInavAgeMinutes,
+      nse_holidays: nseHolidays,
       updated_at: new Date().toISOString(),
     })
     .eq("id", 1);
