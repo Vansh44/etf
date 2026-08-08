@@ -27,42 +27,63 @@ type PriceRow = {
   nav: number | string | null;
   nav_date: string | null;
   fetched_at: string;
+  // Added by the iNAV migration. Absent, not null, on a database that predates
+  // it — hence the legacy select below.
+  inav?: number | string | null;
+  inav_at?: string | null;
+  premium_history?: unknown;
 };
+
+const COLUMNS =
+  "symbol, live_price, closes, last_bar, nav, nav_date, inav, inav_at, premium_history, fetched_at";
+const LEGACY_COLUMNS = "symbol, live_price, closes, last_bar, nav, nav_date, fetched_at";
 
 export async function getPrices(symbols: string[]): Promise<PriceLoad> {
   if (symbols.length === 0) return { data: new Map(), missing: [] };
 
   const supabase = await createClient();
-  const { data: rows } = await supabase
-    .from("prices")
-    .select("symbol, live_price, closes, last_bar, nav, nav_date, fetched_at")
-    .in("symbol", symbols);
+  const current = await supabase.from("prices").select(COLUMNS).in("symbol", symbols);
+
+  // Selecting a column that does not exist fails the whole request, and an
+  // unpriced watchlist blocks every recommendation. Falling back to the
+  // pre-migration columns keeps the advisor working — with the weaker EOD-NAV
+  // premium check — until schema.sql is applied.
+  const legacy = current.error
+    ? await supabase.from("prices").select(LEGACY_COLUMNS).in("symbol", symbols)
+    : null;
+
+  const rows = ((current.error ? legacy?.data : current.data) ?? []) as PriceRow[];
 
   const data = new Map<string, PriceData>();
 
-  for (const row of (rows ?? []) as PriceRow[]) {
+  for (const row of rows) {
     const livePrice = Number(row.live_price);
     if (!Number.isFinite(livePrice) || livePrice <= 0) continue;
     if (!Array.isArray(row.closes) || row.closes.length === 0) continue;
 
-    const nav = row.nav === null ? null : Number(row.nav);
+    const positive = (v: number | string | null | undefined) => {
+      if (v === null || v === undefined) return null;
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
 
     data.set(row.symbol, {
       symbol: row.symbol,
       closes: row.closes.map(Number).filter((n) => Number.isFinite(n)),
       livePrice,
       lastBar: row.last_bar,
-      nav: nav !== null && Number.isFinite(nav) && nav > 0 ? nav : null,
+      nav: positive(row.nav),
       navDate: row.nav_date,
 
-      // The fetcher publishes EOD NAV only — no intraday iNAV and no trailing
-      // premium series yet. Both are optional inputs: with them absent the
-      // premium check falls back to EOD NAV and the percentile gate stays
-      // quiet, which is exactly what it did before. Wire these up in
-      // scripts/fetch_prices.py to switch the stronger checks on.
-      inav: null,
-      inavAt: null,
-      premiumHistory: [],
+      // Both are optional inputs. The fetcher only publishes an iNAV for runs
+      // inside market hours, and premium_history takes ~60 sessions to become
+      // usable (or one `--backfill` run); until then the premium check falls
+      // back to the EOD NAV and the percentile gate stays quiet.
+      inav: positive(row.inav),
+      inavAt: row.inav_at ?? null,
+      premiumHistory: Array.isArray(row.premium_history)
+        ? (row.premium_history as unknown[]).map(Number).filter((n) => Number.isFinite(n))
+        : [],
 
       fetchedAt: row.fetched_at,
     });

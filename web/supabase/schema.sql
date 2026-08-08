@@ -334,3 +334,39 @@ exception when duplicate_object then null; end $$;
 -- old ones, so a deliberately tuned value is never overwritten.
 update settings set gap_weight      = 1.5 where id = 1 and gap_weight      = 1.0;
 update settings set max_premium_pct = 3.0 where id = 1 and max_premium_pct = 1.5;
+
+
+-- ============================================================================
+--  MIGRATION — iNAV and the trailing premium series
+--  Safe to re-run. Apply by pasting this whole file again.
+--
+--  Written by scripts/fetch_prices.py; read by the app. Until this is applied
+--  the fetcher writes prices without them and logs a warning, and the app's
+--  premium check keeps using the end-of-day NAV alone.
+-- ============================================================================
+
+-- ─── Intraday indicative NAV, from NSE's ETF board ──────────────────────────
+-- AMFI's NAV is struck after the close, so judging an intraday price against
+-- it measures the underlying's overnight move as much as any real premium.
+-- inav_at is stored because a stale iNAV is worse than none: the app ignores
+-- anything older than max_inav_age_minutes and falls back to the EOD NAV.
+alter table prices add column if not exists inav    numeric;
+alter table prices add column if not exists inav_at timestamptz;
+do $$ begin
+  alter table prices add constraint prices_inav_positive check (inav is null or inav > 0);
+exception when duplicate_object then null; end $$;
+
+-- ─── Trailing premium observations, percent, oldest first ───────────────────
+-- One per completed session, capped at a trading year by the fetcher. The app
+-- ranks today's premium against this: a 0.5% premium is unremarkable for a
+-- capped international ETF and extraordinary for NIFTYBEES, and only the
+-- ETF's own history knows which is which.
+--
+-- premium_history_through is the date of the last observation, so a rerun
+-- inside the same session cannot append the same day twice.
+alter table prices add column if not exists premium_history         jsonb not null default '[]'::jsonb;
+alter table prices add column if not exists premium_history_through date;
+do $$ begin
+  alter table prices add constraint prices_premium_history_is_array
+    check (jsonb_typeof(premium_history) = 'array');
+exception when duplicate_object then null; end $$;

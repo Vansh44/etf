@@ -16,12 +16,21 @@ reduced version of the same idea — see
 ## How the data gets in
 
 ```
-GitHub Action (cron)  ──yfinance──>  Yahoo
+GitHub Action (cron)  ──yfinance──>  Yahoo      closes + live price
+        │             ──AMFI─────>  NAVAll.txt  end-of-day NAV, by ISIN
+        │             ──NSE──────>  /api/etf    intraday iNAV, in session only
         │
-        └── writes closes + live price ──>  Supabase `prices`
-                                                  │
-                                    Vercel app ───┘  (reads only)
+        └── writes ──>  Supabase `prices`
+                              │
+                Vercel app ───┘  (reads only)
 ```
+
+Each run also appends one `(close - nav) / nav` observation per completed
+session to `premium_history`, which is what the app ranks today's premium
+against — a fixed threshold cannot be right for both NIFTYBEES and a capped
+international ETF. That series takes ~60 sessions to become usable, or one
+hand-triggered run of the Action with **backfill** ticked, which seeds it from
+AMFI's historical NAV report.
 
 **The web app never calls Yahoo.** It can't: Yahoo refuses any request whose TLS
 fingerprint isn't a real browser's. Verified with an identical URL and

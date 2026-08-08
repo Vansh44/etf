@@ -13,6 +13,14 @@ on:
     # overnight (15:45 IST = 10:15 UTC).
     - cron: "15 10 * * 1-5"
   workflow_dispatch: # lets you trigger a refresh by hand from the Actions tab
+    inputs:
+      backfill:
+        description: >-
+          Seed premium_history from AMFI's historical NAV report instead of
+          waiting ~3 months to accumulate it. One-off; downloads the whole
+          market's NAVs a month at a time, so leave it off for normal runs.
+        type: boolean
+        default: false
 
 concurrency:
   group: fetch-prices
@@ -44,4 +52,6 @@ jobs:
           # Must be the SERVICE_ROLE key. The anon key is read-only under RLS
           # and cannot write to the prices table.
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Only ever set by a hand-triggered run; the scheduled ones leave it empty.
+          BACKFILL_PREMIUM_HISTORY: ${{ inputs.backfill && '1' || '' }}
         run: python3 scripts/fetch_prices.py
