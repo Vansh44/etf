@@ -70,7 +70,7 @@ export async function getSettings(): Promise<Settings> {
     // One literal, not a concatenation: supabase-js infers the row type from
     // the string, and only a literal carries the column names into the type.
     .select(
-      "budget, limit_buffer_pct, gap_weight, gap_knee_pct, max_premium_pct, premium_floor_pct, max_premium_pctile, min_candles, max_bar_age_sessions, max_nav_age_days, max_inav_age_minutes, nse_holidays",
+      "budget, limit_buffer_pct, max_premium_pct, premium_floor_pct, max_premium_pctile, min_candles, max_bar_age_sessions, max_nav_age_days, max_inav_age_minutes, nse_holidays",
     )
     .eq("id", 1)
     .maybeSingle();
@@ -89,8 +89,6 @@ export async function getSettings(): Promise<Settings> {
   return {
     budget: num(data.budget, DEFAULT_SETTINGS.budget),
     limitBufferPct: num(data.limit_buffer_pct, DEFAULT_SETTINGS.limitBufferPct),
-    gapWeight: num(data.gap_weight, DEFAULT_SETTINGS.gapWeight),
-    gapKneePct: num(data.gap_knee_pct, DEFAULT_SETTINGS.gapKneePct),
     maxPremiumPct: num(data.max_premium_pct, DEFAULT_SETTINGS.maxPremiumPct),
     premiumFloorPct: num(data.premium_floor_pct, DEFAULT_SETTINGS.premiumFloorPct),
     maxPremiumPctile: num(data.max_premium_pctile, DEFAULT_SETTINGS.maxPremiumPctile),

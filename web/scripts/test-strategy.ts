@@ -4,15 +4,17 @@
  *   node --experimental-strip-types scripts/test-strategy.ts
  */
 import {
-  HIGH_LOOKBACK,
-  PRICE_WINDOW,
+  CHEAPNESS_LOOKBACK,
+  CHEAPNESS_WEIGHT,
+  GAP_WEIGHT,
+  NEUTRAL_MARKS,
   lastCompletedSession,
   premiumOverFairValue,
   premiumVerdict,
   runStrategy,
+  scaleMarks,
   scoreCheapness,
   sessionsBetween,
-  shapeGap,
   type PriceData,
   type Settings,
   type WatchlistItem,
@@ -35,7 +37,13 @@ function check(name: string, got: unknown, want: unknown, tol = 1e-9) {
   }
 }
 function ok(name: string, cond: boolean, detail = "") {
-  cond ? (pass++, console.log(`  ✅ ${name}`)) : (fail++, console.log(`  ❌ ${name} ${detail}`));
+  if (cond) {
+    pass++;
+    console.log(`  ✅ ${name}`);
+  } else {
+    fail++;
+    console.log(`  ❌ ${name} ${detail}`);
+  }
 }
 
 // Spelled out rather than spread from DEFAULT_SETTINGS, so retuning a default
@@ -43,8 +51,6 @@ function ok(name: string, cond: boolean, detail = "") {
 const SETTINGS: Settings = {
   budget: 2500,
   limitBufferPct: 0.2,
-  gapWeight: 1,
-  gapKneePct: 5,
   maxPremiumPct: 3,
   premiumFloorPct: 0.75,
   maxPremiumPctile: 90,
@@ -61,36 +67,14 @@ const ist = (local: string) => Date.parse(`${local}+05:30`);
 const NOW = ist("2026-08-05T12:00:00"); // a Wednesday, mid-session
 const YESTERDAY = "2026-08-04";
 
-/**
- * A gently rising series. Its moving averages sit BELOW the final value, so a
- * live price at or above `end` clears the trend check — a flat or sine series
- * has averages at ~the same level and gets excluded as "still falling", which
- * is correct behaviour but useless as a fixture.
- */
-function rising(end = 100, n = 300, drift = 0.25): number[] {
-  return Array.from({ length: n }, (_, i) =>
-    Number((end * (1 - drift * (1 - i / (n - 1)))).toFixed(4)),
-  );
-}
-
-/** Series that ran up then pulled back — cheap, but still above its 14-day average. */
-function pulledBack(end = 100, n = 300): number[] {
-  const peak = end * 1.12;
-  return Array.from({ length: n }, (_, i) => {
-    if (i < n - 12) return Number((peak * (1 - 0.25 * (1 - i / (n - 13)))).toFixed(4));
-    return Number((peak - (peak - end) * ((i - (n - 13)) / 12)).toFixed(4));
-  });
-}
-
-/** Smallest live price that clears both averages, so trend is never the reason a test fails. */
-function aboveAverages(closes: number[]): number {
-  const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
-  return Math.max(avg(closes.slice(-50)), avg(closes.slice(-14))) * 1.002;
+/** A flat series, so the 14-day average is exactly `level`. */
+function flat(level = 100, n = 300): number[] {
+  return Array.from({ length: n }, () => level);
 }
 
 function priceRow(over: Partial<PriceData> & { symbol: string }): PriceData {
   return {
-    closes: rising(),
+    closes: flat(),
     livePrice: 100,
     lastBar: YESTERDAY,
     nav: null,
@@ -103,74 +87,142 @@ function priceRow(over: Partial<PriceData> & { symbol: string }): PriceData {
   };
 }
 
-/** One fresh, trend-passing price row per watchlist entry. */
+/** One fresh price row per watchlist entry, at its 14-day average. */
 function pricesFor(watchlist: WatchlistItem[]): Map<string, PriceData> {
   return new Map(watchlist.map((w) => [w.symbol, priceRow({ symbol: w.symbol })]));
 }
 
+/** Score the way the strategy says it does, from the two marks. */
+const combined = (cheap: number, gap: number) => CHEAPNESS_WEIGHT * cheap + GAP_WEIGHT * gap;
+
 // ════════════════════════════════════════════════════════════════════════════
-console.log("\n── DRAWDOWN WINDOW CONSISTENCY ──");
-// A spike exactly `look` bars back must be OUTSIDE today's window: today's
-// window is (look-1) prior closes + the live price. If it leaks in, the window
-// is one too wide — the bug this replaced.
+console.log(`\n── CHEAPNESS VS THE ${CHEAPNESS_LOOKBACK}-DAY AVERAGE ──`);
 {
-  const n = 300;
-  const closes = Array.from({ length: n }, () => 100);
-  closes[n - HIGH_LOOKBACK] = 500; // exactly `look` back from the live price
-  const r = scoreCheapness(closes, 100, { lastCloseIsToday: false });
-  check(`spike ${HIGH_LOOKBACK} bars back is excluded (ddNow stays 0)`, r.ddNow, 0);
+  const below = scoreCheapness(flat(100), 95);
+  check("average of a flat series is its level", below.recentAvg, 100);
+  check("5% under the average reads +5 (cheap)", below.belowAvgPct, 5);
+  check("5% over the average reads -5 (dear)", scoreCheapness(flat(100), 105).belowAvgPct, -5);
 
-  const closes2 = Array.from({ length: n }, () => 100);
-  closes2[n - HIGH_LOOKBACK + 1] = 500; // one bar nearer — must be INSIDE
-  const r2 = scoreCheapness(closes2, 100, { lastCloseIsToday: false });
-  check(`spike ${HIGH_LOOKBACK - 1} bars back is included (ddNow = 80%)`, r2.ddNow, 80);
-}
+  // Exactly CHEAPNESS_LOOKBACK closes count — one older is out, the boundary is in.
+  const outside = flat(100);
+  outside[outside.length - CHEAPNESS_LOOKBACK - 1] = 200;
+  check(`a spike ${CHEAPNESS_LOOKBACK + 1} sessions back is ignored`,
+        scoreCheapness(outside, 100).belowAvgPct, 0);
 
-// Window sizes must match exactly: build a series where today's drawdown has a
-// known analytic answer, and confirm the last historical sample equals it when
-// the live price repeats the previous close.
-{
-  const n = 300;
-  const closes = Array.from({ length: n }, (_, i) => 100 + (i % 7));
-  const live = closes[n - 1];
-  const r = scoreCheapness(closes, live, { lastCloseIsToday: false });
-  // History's newest sample uses closes[n-look..n-1]; today's uses
-  // closes[n-look+1..n-1] + live. With live === closes[n-1] the two windows
-  // differ by exactly one element, so equality is NOT expected — what must
-  // hold is that both span `look` observations. Verify via a crafted series
-  // where the extra element is not the max, making them numerically equal.
-  const flat = Array.from({ length: n }, () => 100);
-  flat[n - 1] = 90;
-  const rf = scoreCheapness(flat, 90, { lastCloseIsToday: false });
-  ok(
-    "identical windows agree when the boundary element is not the max",
-    Math.abs(rf.ddNow - 10) < 1e-9,
-    `ddNow=${rf.ddNow}`,
-  );
-  ok("percentiles stay within 0..100", r.ddPctile >= 0 && r.ddPctile <= 100);
-}
+  const inside = flat(100);
+  inside[inside.length - CHEAPNESS_LOOKBACK] = 200;
+  const avgWithSpike = (100 * (CHEAPNESS_LOOKBACK - 1) + 200) / CHEAPNESS_LOOKBACK;
+  check(`a spike ${CHEAPNESS_LOOKBACK} sessions back is counted`,
+        scoreCheapness(inside, 100).recentAvg, avgWithSpike);
 
-// lastCloseIsToday: the live price supersedes today's stored close rather than
-// stacking on top of it.
-{
-  const n = 300;
-  const closes = Array.from({ length: n }, () => 100);
-  closes[n - 1] = 500; // "today's" close, which the live price replaces
-  const superseded = scoreCheapness(closes, 100, { lastCloseIsToday: true });
-  const stacked = scoreCheapness(closes, 100, { lastCloseIsToday: false });
-  check("today's stored close is superseded, not stacked", superseded.ddNow, 0);
-  check("without the flag the same spike leaks in", stacked.ddNow, 80);
+  // During market hours the newest stored bar IS today; the live price replaces it.
+  const withToday = [...flat(100), 500];
+  check("today's own bar is left out of the average when flagged",
+        scoreCheapness(withToday, 100, { lastCloseIsToday: true }).recentAvg, 100);
+  ok("without the flag it would leak in",
+     scoreCheapness(withToday, 100, { lastCloseIsToday: false }).recentAvg > 100);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-console.log("\n── HISTORY CONFIDENCE ──");
+console.log("\n── MARKS ARE SCALED 0-100 ACROSS THE FIELD ──");
 {
-  const full = scoreCheapness(Array.from({ length: PRICE_WINDOW }, () => 100), 100);
-  const half = scoreCheapness(Array.from({ length: 126 }, () => 100), 100);
-  const over = scoreCheapness(Array.from({ length: 400 }, () => 100), 100);
-  check(`${PRICE_WINDOW} closes -> confidence 1`, full.confidence, 1);
-  check("126 closes -> confidence 0.5", half.confidence, 0.5);
-  check("400 closes -> confidence capped at 1", over.confidence, 1);
+  check("best gets 100, worst 0, the rest in proportion", scaleMarks([1, 2, 5]), [0, 25, 100]);
+  check("negative values scale the same way", scaleMarks([-4, 0, 4]), [0, 50, 100]);
+  check("all level -> everyone neutral", scaleMarks([3, 3, 3]),
+        [NEUTRAL_MARKS, NEUTRAL_MARKS, NEUTRAL_MARKS]);
+  check("a single candidate is neutral", scaleMarks([7]), [NEUTRAL_MARKS]);
+  check("float noise is not stretched into a 0-100 spread",
+        scaleMarks([0.1 + 0.2, 0.3]), [NEUTRAL_MARKS, NEUTRAL_MARKS]);
+  check("no candidates, no marks", scaleMarks([]), []);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log(`\n── SCORE = ${CHEAPNESS_WEIGHT} x CHEAPNESS + ${GAP_WEIGHT} x ALLOCATION ──`);
+{
+  // A is 5% under its average, B 2%, C at it. Targets 40 / 30 / 30.
+  const watchlist = [
+    { symbol: "A", name: "a", targetPct: 40 },
+    { symbol: "B", name: "b", targetPct: 30 },
+    { symbol: "C", name: "c", targetPct: 30 },
+  ];
+  const prices = new Map<string, PriceData>([
+    ["A", priceRow({ symbol: "A", livePrice: 95 })],
+    ["B", priceRow({ symbol: "B", livePrice: 98 })],
+    ["C", priceRow({ symbol: "C", livePrice: 100 })],
+  ]);
+  const run = (units: [number, number, number]) =>
+    runStrategy({
+      watchlist,
+      holdings: [
+        { symbol: "A", units: units[0] },
+        { symbol: "B", units: units[1] },
+        { symbol: "C", units: units[2] },
+      ],
+      settings: SETTINGS,
+      prices,
+      priceFailures: [],
+      nowMs: NOW,
+    });
+
+  // Near target on A, B well under, C well over.
+  const r = run([40, 10, 50]);
+  const by = (s: string) => r.ranked.find((c) => c.symbol === s)!;
+  check("deepest discount gets 100 cheapness marks", by("A").cheapnessMarks, 100);
+  check("no discount gets 0", by("C").cheapnessMarks, 0);
+  check("2% of a 0-5% spread gets 40", by("B").cheapnessMarks, 40, 1e-9);
+  check("most underweight gets 100 allocation marks", by("B").gapMarks, 100);
+  check("most overweight gets 0", by("C").gapMarks, 0);
+  ok("every score is exactly the weighted sum of its two marks",
+     r.ranked.every((c) => Math.abs(c.finalScore - combined(c.cheapnessMarks, c.gapMarks)) < 1e-9));
+  check("ranked highest score first", r.ranked.map((c) => c.symbol), ["A", "B", "C"]);
+  check("and the top one is recommended", r.recommendation?.symbol, "A");
+
+  // Same prices, but now A — still the cheapest — is the most overweight.
+  const heavy = run([60, 5, 35]);
+  const hb = (s: string) => heavy.ranked.find((c) => c.symbol === s)!;
+  check("the cheapest ETF gets 0 allocation marks when most overweight", hb("A").gapMarks, 0);
+  check("so it scores only its cheapness half", hb("A").finalScore, combined(100, 0));
+  check("and the underweight one wins instead", heavy.recommendation?.symbol, "B");
+}
+
+// No targets anywhere: every gap is 0, so cheapness alone decides.
+{
+  const watchlist = [
+    { symbol: "DEEP", name: "deep dip", targetPct: null },
+    { symbol: "MILD", name: "mild dip", targetPct: null },
+  ];
+  const r = runStrategy({
+    watchlist,
+    holdings: [],
+    settings: SETTINGS,
+    prices: new Map([
+      ["DEEP", priceRow({ symbol: "DEEP", livePrice: 92 })],
+      ["MILD", priceRow({ symbol: "MILD", livePrice: 99 })],
+    ]),
+    priceFailures: [],
+    nowMs: NOW,
+  });
+  ok("with no targets every ETF gets neutral allocation marks",
+     r.ranked.every((c) => c.gapMarks === NEUTRAL_MARKS));
+  check("so the cheapest wins", r.recommendation?.symbol, "DEEP");
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log("\n── NO TREND FILTER ──");
+{
+  // Falling steadily from 130 to 100, live under every average.
+  const falling = Array.from({ length: 300 }, (_, i) => 130 - (30 * i) / 299);
+  const r = runStrategy({
+    watchlist: [{ symbol: "SLIDE", name: "still falling", targetPct: 100 }],
+    holdings: [],
+    settings: SETTINGS,
+    prices: new Map([["SLIDE", priceRow({ symbol: "SLIDE", closes: falling, livePrice: 99 })]]),
+    priceFailures: [],
+    nowMs: NOW,
+  });
+  check("an ETF below its 50- and 14-day averages is still considered",
+        r.recommendation?.symbol, "SLIDE");
+  ok("and reads as cheap against its 14-day average", (r.ranked[0]?.belowAvgPct ?? 0) > 0);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -280,14 +332,12 @@ console.log("\n── PREMIUM PERCENTILE GATE ──");
 // ════════════════════════════════════════════════════════════════════════════
 console.log("\n── PREMIUM-SENSITIVE ETFs FAIL CLOSED ──");
 {
-  const closes = rising();
-  const live = aboveAverages(closes);
   const run = (premiumSensitive: boolean, over: Partial<PriceData> = {}) =>
     runStrategy({
       watchlist: [{ symbol: "INTL", name: "international", targetPct: 100, premiumSensitive }],
       holdings: [],
       settings: SETTINGS,
-      prices: new Map([["INTL", priceRow({ symbol: "INTL", closes, livePrice: live, ...over })]]),
+      prices: new Map([["INTL", priceRow({ symbol: "INTL", ...over })]]),
       priceFailures: [],
       nowMs: NOW,
     });
@@ -301,92 +351,14 @@ console.log("\n── PREMIUM-SENSITIVE ETFs FAIL CLOSED ──");
   check("the same ETF without the flag is still recommended",
         run(false).recommendation?.symbol, "INTL");
 
-  const eodOnly = run(true, { nav: live, navDate: YESTERDAY });
+  const eodOnly = run(true, { nav: 100, navDate: YESTERDAY });
   check("with an EOD NAV it is judged, not refused", eodOnly.recommendation?.symbol, "INTL");
   ok("but warns that the EOD NAV carries a day of drift",
      eodOnly.warnings.some((w) => w.startsWith("INTL:")),
      JSON.stringify(eodOnly.warnings));
 
-  const withInav = run(true, { inav: live, inavAt: new Date(NOW - 5 * 60_000).toISOString() });
+  const withInav = run(true, { inav: 100, inavAt: new Date(NOW - 5 * 60_000).toISOString() });
   check("with a fresh iNAV there is nothing to warn about", withInav.warnings, []);
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-console.log("\n── ALLOCATION GAP SHAPING ──");
-{
-  check("inside the knee the gap term is linear", shapeGap(4, 1.5, 5), 6);
-  check("and symmetric", shapeGap(-4, 1.5, 5), -6);
-  check("continuous at the knee", shapeGap(5, 1.5, 5), 7.5);
-  // The docstring's worked example: 15pp overweight at weight 1.5, knee 5.
-  check("quadratic past it: 15pp over costs 52.5, not a linear 22.5", shapeGap(-15, 1.5, 5), -52.5);
-  ok("slope is continuous across the knee",
-     Math.abs((shapeGap(5.001, 1, 5) - shapeGap(5, 1, 5)) / 0.001 - 1) < 1e-3);
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-console.log("\n── ALLOCATION GAP DECIDES WHAT TO BUY ──");
-{
-  // Two ETFs, equal cheapness by construction. UNDER is far below target,
-  // OVER is far above. The gap must decide.
-  const closes = rising();
-  const live = aboveAverages(closes);
-  const prices = new Map<string, PriceData>([
-    ["UNDER", priceRow({ symbol: "UNDER", closes, livePrice: live })],
-    ["OVER", priceRow({ symbol: "OVER", closes, livePrice: live })],
-  ]);
-  const result = runStrategy({
-    watchlist: [
-      { symbol: "UNDER", name: "under", targetPct: 60 },
-      { symbol: "OVER", name: "over", targetPct: 40 },
-    ],
-    holdings: [
-      { symbol: "UNDER", units: 1 },
-      { symbol: "OVER", units: 99 },
-    ],
-    settings: SETTINGS,
-    prices,
-    priceFailures: [],
-    nowMs: NOW,
-  });
-  const under = result.ranked.find((r) => r.symbol === "UNDER")!;
-  const over = result.ranked.find((r) => r.symbol === "OVER")!;
-  ok("underweight ETF has a positive gap", under.gapPct > 0, `${under.gapPct}`);
-  ok("overweight ETF has a negative gap", over.gapPct < 0, `${over.gapPct}`);
-  ok("equal cheapness, so the gap decides the order", result.ranked[0].symbol === "UNDER",
-     `ranked: ${result.ranked.map((r) => r.symbol).join(", ")}`);
-  check("recommendation is the underweight one", result.recommendation?.symbol, "UNDER");
-  ok("no hard cap blocks the overweight ETF, it is merely ranked lower",
-     result.ranked.some((r) => r.symbol === "OVER"));
-  ok("final score = cheapness x confidence + shaped gap",
-     Math.abs(under.finalScore - (under.cheapnessAdjusted + under.gapContribution)) < 1e-9);
-  check("the gap term is the shaped one",
-        under.gapContribution, shapeGap(under.gapPct, SETTINGS.gapWeight, SETTINGS.gapKneePct));
-}
-
-// gapWeight scales the influence
-{
-  const cheapCloses = pulledBack();      // dipped hard -> high cheapness
-  const dearCloses = rising();
-  // Live AT its high, not merely above its averages: dips carry 75% of
-  // cheapness, so even a 2% dip against a dip-free history reads as cheap.
-  const prices = new Map<string, PriceData>([
-    ["CHEAP", priceRow({ symbol: "CHEAP", closes: cheapCloses, livePrice: aboveAverages(cheapCloses) })],
-    ["NEEDED", priceRow({ symbol: "NEEDED", closes: dearCloses, livePrice: dearCloses[dearCloses.length - 1] })],
-  ]);
-  const base = {
-    watchlist: [
-      { symbol: "CHEAP", name: "cheap but at target", targetPct: 10 },
-      { symbol: "NEEDED", name: "pricey but underweight", targetPct: 90 },
-    ],
-    holdings: [{ symbol: "CHEAP", units: 50 }, { symbol: "NEEDED", units: 1 }],
-    prices,
-    priceFailures: [],
-    nowMs: NOW,
-  };
-  const noGap = runStrategy({ ...base, settings: { ...SETTINGS, gapWeight: 0 } });
-  const bigGap = runStrategy({ ...base, settings: { ...SETTINGS, gapWeight: 5 } });
-  check("gapWeight 0 -> cheapness alone wins", noGap.ranked[0].symbol, "CHEAP");
-  check("gapWeight 5 -> the underweight one wins", bigGap.ranked[0].symbol, "NEEDED");
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -407,11 +379,10 @@ console.log("\n── NSE SESSION CALENDAR ──");
 // ════════════════════════════════════════════════════════════════════════════
 console.log("\n── STALE DATA IS REFUSED ──");
 {
-  const closes = rising();
   // One symbol lags the newest session -> excluded, the fresh one survives.
   const prices = new Map<string, PriceData>([
-    ["FRESH", priceRow({ symbol: "FRESH", closes, lastBar: YESTERDAY })],
-    ["LAGGY", priceRow({ symbol: "LAGGY", closes, lastBar: "2026-07-28" })],
+    ["FRESH", priceRow({ symbol: "FRESH", lastBar: YESTERDAY })],
+    ["LAGGY", priceRow({ symbol: "LAGGY", lastBar: "2026-07-28" })],
   ]);
   const r = runStrategy({
     watchlist: [
@@ -430,14 +401,11 @@ console.log("\n── STALE DATA IS REFUSED ──");
   ok("the up-to-date symbol still ranks", r.ranked.some((c) => c.symbol === "FRESH"));
 
   // Everything stale -> refuse outright, name nothing.
-  const allStale = new Map<string, PriceData>([
-    ["A", priceRow({ symbol: "A", closes, lastBar: "2026-07-20" })],
-  ]);
   const blocked = runStrategy({
     watchlist: [{ symbol: "A", name: "a", targetPct: 100 }],
     holdings: [],
     settings: SETTINGS,
-    prices: allStale,
+    prices: new Map([["A", priceRow({ symbol: "A", lastBar: "2026-07-20" })]]),
     priceFailures: [],
     nowMs: NOW,
   });
@@ -452,7 +420,7 @@ console.log("\n── STALE DATA IS REFUSED ──");
     watchlist: [{ symbol: "A", name: "a", targetPct: 100 }],
     holdings: [],
     settings: { ...SETTINGS, maxBarAgeSessions: 0 },
-    prices: new Map([["A", priceRow({ symbol: "A", closes, lastBar: "2026-08-07" })]]),
+    prices: new Map([["A", priceRow({ symbol: "A", lastBar: "2026-08-07" })]]),
     priceFailures: [],
     nowMs: ist("2026-08-10T10:00:00"),
   });
@@ -464,38 +432,24 @@ console.log("\n── STALE DATA IS REFUSED ──");
 // ════════════════════════════════════════════════════════════════════════════
 console.log("\n── THIN HISTORY IS EXCLUDED AT THE CONFIGURED BAR ──");
 {
-  const short = rising(100, 150);
-  const r = runStrategy({
-    watchlist: [{ symbol: "NEW", name: "recently listed", targetPct: 100 }],
-    holdings: [],
-    settings: SETTINGS, // minCandles 252
-    prices: new Map([["NEW", priceRow({ symbol: "NEW", closes: short })]]),
-    priceFailures: [],
-    nowMs: NOW,
-  });
+  const short = flat(100, 150);
+  const run = (minCandles: number) =>
+    runStrategy({
+      watchlist: [{ symbol: "NEW", name: "recently listed", targetPct: 100 }],
+      holdings: [],
+      settings: { ...SETTINGS, minCandles },
+      prices: new Map([["NEW", priceRow({ symbol: "NEW", closes: short })]]),
+      priceFailures: [],
+      nowMs: NOW,
+    });
   ok("150 closes excluded when 252 required",
-     r.excluded.some((e) => e.symbol === "NEW" && e.reason.includes("need 252")),
-     JSON.stringify(r.excluded));
-
-  const lenient = runStrategy({
-    watchlist: [{ symbol: "NEW", name: "recently listed", targetPct: 100 }],
-    holdings: [],
-    settings: { ...SETTINGS, minCandles: 120 },
-    prices: new Map([["NEW", priceRow({ symbol: "NEW", closes: short })]]),
-    priceFailures: [],
-    nowMs: NOW,
-  });
-  ok("lowering the bar admits it, at reduced confidence",
-     lenient.ranked.length === 1 && lenient.ranked[0].confidence < 1,
-     `confidence=${lenient.ranked[0]?.confidence}`);
-  ok("reduced confidence shrinks the cheapness contribution",
-     lenient.ranked[0].cheapnessAdjusted < lenient.ranked[0].cheapness);
+     run(252).excluded.some((e) => e.symbol === "NEW" && e.reason.includes("need 252")));
+  check("lowering the bar admits it", run(120).recommendation?.symbol, "NEW");
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 console.log("\n── PREMIUM BLOCKS A BUY END-TO-END ──");
 {
-  const closes = rising();
   const r = runStrategy({
     watchlist: [
       { symbol: "RICH", name: "at a premium", targetPct: 50 },
@@ -504,8 +458,9 @@ console.log("\n── PREMIUM BLOCKS A BUY END-TO-END ──");
     holdings: [],
     settings: SETTINGS,
     prices: new Map([
-      ["RICH", priceRow({ symbol: "RICH", closes, livePrice: 100, nav: 86, navDate: YESTERDAY })],
-      ["FAIR", priceRow({ symbol: "FAIR", closes, livePrice: 100, nav: 100, navDate: YESTERDAY })],
+      // RICH is the deeper discount — it would win on marks if it got that far.
+      ["RICH", priceRow({ symbol: "RICH", livePrice: 95, nav: 82, navDate: YESTERDAY })],
+      ["FAIR", priceRow({ symbol: "FAIR", livePrice: 100, nav: 100, navDate: YESTERDAY })],
     ]),
     priceFailures: [],
     nowMs: NOW,
@@ -557,35 +512,61 @@ console.log("\n── INTEGRITY GATES ──");
 
   const noTargets = withTargets([null, null]);
   check("no targets at all is not a target-sum problem", noTargets.warnings, []);
-  ok("and still recommends on cheapness alone", noTargets.recommendation !== null);
+  ok("and still recommends", noTargets.recommendation !== null);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 console.log("\n── BUDGET AND PROJECTION ──");
 {
-  const closes = rising();
   const r = runStrategy({
     watchlist: [{ symbol: "A", name: "a", targetPct: 100 }],
     holdings: [{ symbol: "A", units: 1 }],
     settings: SETTINGS,
-    prices: new Map([["A", priceRow({ symbol: "A", closes, livePrice: 100 })]]),
+    prices: new Map([["A", priceRow({ symbol: "A" })]]),
     priceFailures: [],
     nowMs: NOW,
   });
   const rec = r.recommendation!;
   ok("cost stays inside the budget", rec.cost <= SETTINGS.budget, `cost=${rec.cost}`);
+  check("limit price sits limitBufferPct above live", rec.limitPrice, 100.2);
   ok("projected weight is reported", rec.projectedPct > 0);
 
   const dear = runStrategy({
     watchlist: [{ symbol: "A", name: "a", targetPct: 100 }],
     holdings: [],
     settings: SETTINGS,
-    prices: new Map([["A", priceRow({ symbol: "A", closes, livePrice: 9000 })]]),
+    prices: new Map([["A", priceRow({ symbol: "A", closes: flat(9000), livePrice: 9000 })]]),
     priceFailures: [],
     nowMs: NOW,
   });
   ok("unaffordable single unit yields no recommendation", dear.recommendation === null);
-  ok("and says why", (dear.blockedReason ?? "").includes("affordable"), dear.blockedReason ?? "");
+  ok("and says why",
+     dear.excluded.some((e) => e.symbol === "A" && e.reason.includes("over the Rs.2500.00 budget")),
+     JSON.stringify(dear.excluded));
+
+  // An ETF you cannot afford must not stretch the scale the others are marked on.
+  const mixed = runStrategy({
+    watchlist: [
+      { symbol: "PRICEY", name: "pricey", targetPct: 34 },
+      { symbol: "B", name: "b", targetPct: 33 },
+      { symbol: "C", name: "c", targetPct: 33 },
+    ],
+    holdings: [],
+    settings: SETTINGS,
+    prices: new Map([
+      // 10% under its average — would take the 100 if it were marked.
+      ["PRICEY", priceRow({ symbol: "PRICEY", closes: flat(10_000), livePrice: 9000 })],
+      ["B", priceRow({ symbol: "B", livePrice: 98 })],
+      ["C", priceRow({ symbol: "C", livePrice: 100 })],
+    ]),
+    priceFailures: [],
+    nowMs: NOW,
+  });
+  ok("the unaffordable ETF is excluded before marking",
+     mixed.excluded.some((e) => e.symbol === "PRICEY") &&
+       !mixed.ranked.some((c) => c.symbol === "PRICEY"));
+  check("so the deepest discount left still gets the full 100",
+        mixed.ranked.find((c) => c.symbol === "B")?.cheapnessMarks, 100);
 }
 
 console.log(`\n${fail === 0 ? "✅ ALL PASS" : "❌ FAILURES"} — ${pass} passed, ${fail} failed\n`);

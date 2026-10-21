@@ -55,22 +55,21 @@ rate-limited.
                are more than 5pp away from summing to 100
 1. FRESHNESS   refuse everything if prices are more than `max_bar_age_sessions`
                NSE sessions behind; exclude any symbol whose bar lags the newest one
-2. HISTORY     need `min_candles` sessions (default 252). Below the 252-session
-               scoring window, cheapness is discounted for confidence
-3. TREND       above the 50-day avg        -> keep
-               below 50-day, above 14-day   -> keep (dip turning up)
-               below BOTH                   -> discard, still falling
-4. PREMIUM     price too far above iNAV / NAV, absolutely or for this ETF -> discard
-5. SCORE       final = cheapness x confidence + shaped allocation gap
-6. BUDGET      skip anything one unit of which busts the budget
-7. RECOMMEND   the highest-scoring candidate that fits
+2. HISTORY     need `min_candles` daily closes (default 252)
+3. PREMIUM     price too far above iNAV / NAV, absolutely or for this ETF -> discard
+4. BUDGET      discard anything one unit of which busts the budget
+5. MARKS       cheapness and allocation gap, each marked 0-100 against the
+               ETFs still in the running
+6. SCORE       final = 0.5 x cheapness marks + 0.5 x allocation marks
+7. RECOMMEND   the highest score
 ```
 
-**Cheapness decides when to buy; the allocation gap decides what to buy.**
+**Half the score is how cheap an ETF is against its own last 14 sessions; half
+is how far it sits below its target.**
 
-There is no hard concentration cap. An ETF above its target earns a *negative*
-gap, which lowers its score, instead of being blocked outright — and that
-penalty turns quadratic past `gap_knee_pct`, so an extreme overweight cannot win.
+There is no trend filter: an ETF still sliding below its moving averages is
+marked like any other. There is no hard concentration cap either — an ETF above
+its target simply earns low allocation marks.
 
 ### Freshness
 
@@ -81,43 +80,50 @@ calendar is only as good as the **NSE holidays** list on the Settings page: a
 missing holiday reads as a skipped session, which is what the default
 `max_bar_age_sessions = 1` of slack absorbs.
 
-### Cheapness (0–100)
+### Cheapness
 
-Measured against each ETF's **own** history, never against the other ETFs, so a
-volatile ETF and a steady one are comparable. Scale-invariant — the rupee price
-level carries no information.
+`below_avg = (avg14 − live) / avg14`, where `avg14` is the mean of the ETF's
+last 14 completed daily closes. Positive means it trades below its recent
+average. During market hours Yahoo's newest daily bar is today's own, so it is
+left out — the live price takes its place rather than being averaged against
+itself.
 
-- **A** — where the live price sits in its own trailing 1-year range of closes
-  (0 = at its 52-week low) → contributes `100 − percentile`
-- **B** — today's drawdown from its 50-day high, ranked against its own past
-  year of drawdowns → contributes that percentile
-- `cheapness = 0.25 × A + 0.75 × B`
-
-The split is deliberately lopsided. A is a trend-level measure — anything in a
-sustained uptrend reads expensive on it forever — and the same rising price
-already pushes that ETF overweight and its allocation gap negative, so weighting
-A heavily would penalise a strong compounder twice for one cause. B ranks
-today's dip against the ETF's own dips, so it is genuinely mean-reverting.
-
-Both drawdown windows are exactly `HIGH_LOOKBACK` observations wide: history
-uses `closes[i-look+1 .. i]`, and today uses `look − 1` prior closes plus the
-live price. Getting this wrong gives today a window one observation too wide,
-which makes today's dip look systematically deeper than the history it is
-ranked against.
+This is a raw percentage, so ETFs that swing further (MON100, small caps) take
+the top cheapness marks more often than steady ones. The allocation half is the
+counterweight: every purchase raises the bought ETF's weight and lowers its
+allocation marks next time.
 
 ### Allocation gap
 
-`gap = target_pct − current_pct`, in percentage points. Inside `gap_knee_pct`
-(default 5) it contributes `gap_weight × gap`; beyond the knee the magnitude
-becomes `|gap| + (|gap| − knee)² / knee`. That is continuous in both value and
-slope at the knee, so ordinary drift scores exactly as a linear term would,
-while a 15pp overweight at weight 1.5 costs 52.5 points instead of 22.5 — more
-than any cheapness score can make up.
-
+`gap = target_pct − current_pct`, in percentage points, where `current_pct` is
+the ETF's share of everything you hold — including holdings off the watchlist.
 Set targets per ETF on the Watchlist page. They should sum to 100: more than
 1pp off and the dashboard warns, more than 5pp off and it refuses to recommend.
-An ETF with no target scores on cheapness alone. `gap_weight = 0` ignores
-targets entirely; higher values make them dominate cheapness.
+An ETF with no target counts as exactly on target (gap 0).
+
+### Marks and the score
+
+Each metric is marked 0–100 **against the other ETFs still in the running**:
+the best value gets 100, the worst gets 0, and the rest in proportion to where
+they fall between. If every ETF has the same value on a metric — or only one
+ETF is left — they all get a neutral 50 on it. Then
+
+`score = 0.5 × cheapness marks + 0.5 × allocation marks`
+
+and the highest score is recommended. Because marks are relative, the budget
+check runs first: an ETF you cannot afford would otherwise stretch the scale
+everything else is marked on.
+
+A worked example, all three at the same 14-day average of Rs.100:
+
+| ETF | Price vs avg | Cheapness | Weight / target | Gap | Allocation | Score |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A | 5% below | 100 | 38.9% / 40% | +1.1pp | 54 | **77.1** |
+| B | 2% below | 40 | 10.0% / 30% | +20.0pp | 100 | 70.0 |
+| C | at it | 0 | 51.1% / 30% | −21.1pp | 0 | 0.0 |
+
+A wins. Hold enough A to put it 18.8pp over target and its allocation marks
+drop to 0: it scores 50 on cheapness alone and B wins with 70.
 
 ### Premium over fair value
 
@@ -266,7 +272,7 @@ yourself out entirely.
 | **Advisor** | Runs the strategy: recommendation with its score breakdown, ranking, excluded ETFs and why, warnings, portfolio summary |
 | **Watchlist** | ETFs the advisor may recommend, each one's target allocation, and whether it can trade far from NAV. Use exact NSE symbols |
 | **Portfolio** | What you own, with average buy prices for P&L. Include ETFs *not* on the watchlist — they count toward your total |
-| **Settings** | Budget, gap weight and knee, premium limits, history and freshness limits, NSE holidays, limit buffer, and the email allowlist |
+| **Settings** | Budget, premium limits, history and freshness limits, NSE holidays, limit buffer, and the email allowlist. The 50/50 score split is fixed in code |
 
 Prices are whatever the last Action run wrote. The dashboard shows the newest
 session on file and when the fetcher last ran, and refuses to recommend
@@ -309,29 +315,32 @@ is yours.
 cd web && node --experimental-strip-types scripts/test-strategy.ts
 ```
 
-Covers the drawdown window consistency, history confidence, iNAV vs EOD NAV
-selection and staleness, the premium percentile gate and noise floor,
-premium-sensitive ETFs failing closed, gap shaping and allocation-gap ranking,
-the NSE session calendar, stale-data refusal, the integrity gates (unpriced
-holdings, target sums), and the budget walk. Exits non-zero on any failure.
+Covers the 14-day cheapness window, 0–100 mark scaling and its ties, the 50/50
+score and the ranking it produces, the absence of a trend filter, iNAV vs EOD
+NAV selection and staleness, the premium percentile gate and noise floor,
+premium-sensitive ETFs failing closed, the NSE session calendar, stale-data
+refusal, the integrity gates (unpriced holdings, target sums), and the budget
+check — including that an unaffordable ETF never stretches the marking scale.
+Exits non-zero on any failure.
 
-One fixture note worth knowing if you add tests: a **flat or sine price series
-fails the trend check**, because its moving averages sit at the same level as
-the price, so it is correctly discarded as "still falling". Use the `rising()` /
-`pulledBack()` helpers, which pass the trend check by construction.
+Fixture note if you add tests: `flat(level)` makes the 14-day average exactly
+`level`, so a live price of 95 on `flat(100)` is precisely 5% below it.
 
 ## The local Python script has diverged
 
-`main.py` in the repo root is the original standalone advisor. It shares the
-two cheapness components and the trend rule, and it has the same drawdown-window
-fix and 252-session minimum. But it does **not** have:
+`main.py` in the repo root is the original standalone advisor, and it still runs
+the **old** strategy. Where the web app now scores 50/50 on cheapness against the
+14-day average and allocation gap, `main.py`:
 
-- target allocations or allocation-gap scoring (no database to read them from) —
-  it uses a hard `MAX_WEIGHT_PCT` concentration cap instead
-- the 25/75 cheapness weighting — it still averages the two components 50/50
-- the premium-over-NAV check
-- the stale-session refusal
+- scores cheapness against each ETF's own past year — where the price sits in
+  its 1-year range, and how unusual today's dip from its 50-day high is
+- drops any ETF trading below both its 50-day and 14-day averages
+- has no target allocations (no database to read them from) and uses a hard
+  `MAX_WEIGHT_PCT` concentration cap instead
+- has no premium-over-NAV check
+- has no stale-session refusal
 
-The last two matter most. When this was written, `main.py` recommended MON100 —
+So the two will often recommend different ETFs. The last two gaps matter most:
+when this was written, `main.py` recommended MON100 —
 the ETF the web app refuses because it was 16% above NAV. **Treat the web app as
 authoritative**, and either retire `main.py` or remember what it doesn't check.

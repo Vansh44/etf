@@ -25,7 +25,7 @@ export default async function SettingsPage() {
     <main className="mx-auto max-w-3xl space-y-4 p-3 pb-16 sm:space-y-5 sm:p-6">
       {/* ── strategy settings ──────────────────────────────────── */}
       <Card>
-        <CardHeader title="Strategy" hint="How much to spend, how hard to chase your target allocations, and when to refuse the data." />
+        <CardHeader title="Strategy" hint="How much to spend, which ETFs to refuse, and when to refuse the data. The score itself is fixed: half cheapness against the 14-day average, half allocation gap." />
         <ActionForm action={updateSettings} className="space-y-4 p-4 sm:p-5">
           <Field
             label="Budget (Rs. per run)"
@@ -37,40 +37,6 @@ export default async function SettingsPage() {
               min="1"
               step="1"
               defaultValue={settings.budget}
-              required
-              className={input}
-              style={inputStyle}
-            />
-          </Field>
-
-          <Field
-            label="Gap weight"
-            hint="How hard the allocation gap pulls. Score = cheapness + this × (target − current), in percentage points. 0 ignores targets entirely; 5 makes them dominate."
-          >
-            <input
-              name="gap_weight"
-              type="number"
-              min="0"
-              max="20"
-              step="0.1"
-              defaultValue={settings.gapWeight}
-              required
-              className={input}
-              style={inputStyle}
-            />
-          </Field>
-
-          <Field
-            label="Gap knee (pp)"
-            hint="Allocation drift beyond this many percentage points stops being a linear penalty and turns quadratic, so extreme overweights price themselves out without a hard cap."
-          >
-            <input
-              name="gap_knee_pct"
-              type="number"
-              min="1"
-              max="50"
-              step="0.5"
-              defaultValue={settings.gapKneePct}
               required
               className={input}
               style={inputStyle}
@@ -130,7 +96,7 @@ export default async function SettingsPage() {
 
           <Field
             label="Minimum history (sessions)"
-            hint="Cheapness is scored on a 252-session window, so 252 is the honest floor. Lower it and shorter histories are admitted with a proportionally reduced confidence."
+            hint="An ETF needs at least this many daily closes before it is considered. Cheapness only looks back 14 sessions, so this is purely a track-record filter: lower it to let newly listed ETFs in sooner."
           >
             <input
               name="min_candles"

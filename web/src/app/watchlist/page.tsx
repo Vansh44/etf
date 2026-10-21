@@ -29,7 +29,7 @@ export default async function WatchlistPage() {
       <Card>
         <CardHeader
           title="Watchlist"
-          hint="The ETFs the advisor may recommend, and the share of your portfolio you want each to be. Use exact NSE symbols. Leave a target blank to score that ETF on cheapness alone. Tick “far from NAV” for international or thinly traded ETFs: when there is no NAV to check their premium against, they are refused instead of given the benefit of the doubt."
+          hint="The ETFs the advisor may recommend, and the share of your portfolio you want each to be. Use exact NSE symbols. Leave a target blank and that ETF counts as exactly on target. Tick “far from NAV” for international or thinly traded ETFs: when there is no NAV to check their premium against, they are refused instead of given the benefit of the doubt."
         />
         <ActionForm action={addWatchlistItem} resetOnSuccess className="p-4 sm:p-5">
           <div className="grid gap-3 sm:grid-cols-[11rem_1fr_7rem_auto_auto] sm:items-end">

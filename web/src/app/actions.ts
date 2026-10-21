@@ -229,8 +229,6 @@ export async function updateSettings(formData: FormData): Promise<ActionResult> 
 
   const budget = num("budget");
   const limitBufferPct = num("limit_buffer_pct");
-  const gapWeight = num("gap_weight");
-  const gapKneePct = num("gap_knee_pct");
   const maxPremiumPct = num("max_premium_pct");
   const premiumFloorPct = num("premium_floor_pct");
   const maxPremiumPctile = num("max_premium_pctile");
@@ -253,14 +251,6 @@ export async function updateSettings(formData: FormData): Promise<ActionResult> 
     [
       !Number.isFinite(limitBufferPct) || limitBufferPct < 0 || limitBufferPct > 5,
       "Limit buffer must be between 0 and 5 percent.",
-    ],
-    [
-      !Number.isFinite(gapWeight) || gapWeight < 0 || gapWeight > 20,
-      "Gap weight must be between 0 and 20.",
-    ],
-    [
-      !Number.isFinite(gapKneePct) || gapKneePct < 1 || gapKneePct > 50,
-      "Gap knee must be between 1 and 50 percentage points.",
     ],
     [
       !Number.isFinite(maxPremiumPct) || maxPremiumPct < 0 || maxPremiumPct > 50,
@@ -304,8 +294,6 @@ export async function updateSettings(formData: FormData): Promise<ActionResult> 
     .update({
       budget,
       limit_buffer_pct: limitBufferPct,
-      gap_weight: gapWeight,
-      gap_knee_pct: gapKneePct,
       max_premium_pct: maxPremiumPct,
       premium_floor_pct: premiumFloorPct,
       max_premium_pctile: maxPremiumPctile,

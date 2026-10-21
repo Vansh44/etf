@@ -4,10 +4,9 @@ import { isAllowed } from "@/lib/supabase/server";
 import { getPrices } from "@/lib/prices";
 import {
   runStrategy,
-  HIGH_LOOKBACK,
-  PRICE_WINDOW,
-  TREND_LONG,
-  TREND_SHORT,
+  CHEAPNESS_LOOKBACK,
+  CHEAPNESS_WEIGHT,
+  GAP_WEIGHT,
 } from "@/lib/strategy";
 import { valuePortfolio } from "@/lib/valuation";
 import { isDispatchConfigured } from "@/lib/github";
@@ -30,6 +29,10 @@ import {
 export const dynamic = "force-dynamic";
 
 const signedPts = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(1)}`;
+/** "2.3% below" / "1.1% above" — where the price sits against its recent average. */
+const vsAverage = (belowPct: number) =>
+  `${Math.abs(belowPct).toFixed(1)}% ${belowPct >= 0 ? "below" : "above"}`;
+const share = (weight: number) => `${(weight * 100).toFixed(0)}%`;
 
 export default async function AdvisorPage() {
   if (!(await isAllowed())) return <NotAllowedNotice />;
@@ -75,7 +78,7 @@ export default async function AdvisorPage() {
   });
 
   const { totals } = valuePortfolio(holdings, prices, new Set(watchlist.map((w) => w.symbol)));
-  const { recommendation: pick, ranked, excluded, skipped, freshness, warnings } = result;
+  const { recommendation: pick, ranked, excluded, freshness, warnings } = result;
   const heldUnits = holdings.find((h) => h.symbol === pick?.symbol)?.units ?? 0;
 
   return (
@@ -86,7 +89,8 @@ export default async function AdvisorPage() {
           <div className="min-w-0">
             <h1 className="text-lg font-semibold sm:text-xl">Which ETF should I buy?</h1>
             <p className="mt-1 text-sm" style={{ color: "var(--ink-2)" }}>
-              Rs.{rupee0(settings.budget)} budget · gap weight {settings.gapWeight} ·{" "}
+              Rs.{rupee0(settings.budget)} budget · {share(CHEAPNESS_WEIGHT)} cheapness,{" "}
+              {share(GAP_WEIGHT)} allocation ·{" "}
               {freshness.latestBar
                 ? `data to ${freshness.latestBar}`
                 : "no data yet"}
@@ -170,43 +174,44 @@ export default async function AdvisorPage() {
                 className="mt-4 rounded-xl border p-3"
                 style={{ borderColor: "var(--hairline)", background: "var(--surface)" }}
               >
-                <p className="text-xs font-medium" style={{ color: "var(--ink-2)" }}>
-                  Why this one — score {pick.finalScore.toFixed(1)}
+                <p className="tnum text-xs font-medium" style={{ color: "var(--ink-2)" }}>
+                  Why this one — score {pick.finalScore.toFixed(1)} = {share(CHEAPNESS_WEIGHT)} ×{" "}
+                  {pick.cheapnessMarks.toFixed(0)} + {share(GAP_WEIGHT)} × {pick.gapMarks.toFixed(0)}
                 </p>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   <div>
                     <p className="tnum text-sm">
-                      <strong>{pick.cheapnessAdjusted.toFixed(1)}</strong> cheapness
+                      <strong>{pick.cheapnessMarks.toFixed(0)}</strong>/100 cheapness
                     </p>
-                    <p className="text-xs" style={{ color: "var(--ink-2)" }}>
-                      {pick.cheapness.toFixed(1)}/100
-                      {pick.confidence < 1 && (
-                        <> × {(pick.confidence * 100).toFixed(0)}% confidence</>
-                      )}{" "}
-                      — {pick.ddNow.toFixed(1)}% off its {HIGH_LOOKBACK}-day high, deeper than{" "}
-                      {pick.ddPctile.toFixed(0)}% of its own dips
+                    <p className="tnum text-xs" style={{ color: "var(--ink-2)" }}>
+                      Rs.{rupee(pick.livePrice)} is {vsAverage(pick.belowAvgPct)} its{" "}
+                      {CHEAPNESS_LOOKBACK}-day average of Rs.{rupee(pick.recentAvg)}
                     </p>
                   </div>
                   <div>
                     <p className="tnum text-sm">
-                      <strong>{signedPts(pick.gapContribution)}</strong> allocation gap
+                      <strong>{pick.gapMarks.toFixed(0)}</strong>/100 allocation gap
                     </p>
-                    <p className="text-xs" style={{ color: "var(--ink-2)" }}>
+                    <p className="tnum text-xs" style={{ color: "var(--ink-2)" }}>
                       {pick.targetPct === null ? (
-                        <>no target set, so no gap</>
+                        <>no target set, so counted as on target</>
                       ) : (
                         <>
                           at {pick.currentPct.toFixed(1)}% vs {pick.targetPct.toFixed(0)}% target ={" "}
-                          {signedPts(pick.gapPct)}pt × {settings.gapWeight} weight
+                          {signedPts(pick.gapPct)}pt
                         </>
                       )}
                     </p>
                   </div>
                 </div>
+                <p className="mt-2 text-xs" style={{ color: "var(--ink-2)" }}>
+                  {ranked.length === 1
+                    ? "Only one ETF is eligible, so both marks sit at a neutral 50."
+                    : `Marks compare the ${ranked.length} eligible ETFs with each other: the cheapest gets 100 for cheapness, the most underweight gets 100 for allocation.`}
+                </p>
               </div>
 
               <dl className="mt-3">
-                <DefRow k="Trend" v={pick.detail} />
                 <DefRow
                   k={pick.premiumSource === "inav" ? "iNAV" : "NAV"}
                   v={
@@ -303,46 +308,36 @@ export default async function AdvisorPage() {
         <Card>
           <CardHeader
             title="Ranking"
-            hint="Score = cheapness (scored against each ETF's own history) + gap weight × how far below target it sits."
+            hint={`Score = ${share(CHEAPNESS_WEIGHT)} × cheapness marks + ${share(GAP_WEIGHT)} × allocation marks. Cheapness: how far below its own ${CHEAPNESS_LOOKBACK}-day average each ETF trades — the deepest discount gets 100, the dearest 0. Allocation: how far below target it sits — the most underweight gets 100, the most overweight 0.`}
           />
 
           {/* Mobile cards */}
           <ul className="rows sm:hidden">
-            {ranked.map((r, i) => {
-              const skip = skipped.find((s) => s.symbol === r.symbol);
-              return (
-                <li key={r.symbol} className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="tnum text-sm" style={{ color: "var(--ink-2)" }}>
-                          {i + 1}
-                        </span>
-                        <span className="font-semibold">{r.symbol}</span>
-                        {pick?.symbol === r.symbol && <Pill tone="gain">picked</Pill>}
-                        <Pill>{r.label}</Pill>
-                      </div>
-                      <p className="tnum mt-1.5 text-xs" style={{ color: "var(--ink-2)" }}>
-                        cheap {r.cheapnessAdjusted.toFixed(1)}
-                        {r.confidence < 1 && ` (${(r.confidence * 100).toFixed(0)}% conf)`} · gap{" "}
-                        {signedPts(r.gapContribution)}
-                        {r.targetPct !== null && (
-                          <> · {r.currentPct.toFixed(1)}% of {r.targetPct.toFixed(0)}%</>
-                        )}
-                      </p>
-                      {skip && (
-                        <p className="mt-1 text-xs" style={{ color: "var(--ink-2)" }}>
-                          Skipped: {skip.reason}
-                        </p>
-                      )}
+            {ranked.map((r, i) => (
+              <li key={r.symbol} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="tnum text-sm" style={{ color: "var(--ink-2)" }}>
+                        {i + 1}
+                      </span>
+                      <span className="font-semibold">{r.symbol}</span>
+                      {pick?.symbol === r.symbol && <Pill tone="gain">picked</Pill>}
                     </div>
-                    <p className="figure shrink-0 text-lg font-semibold">
-                      {r.finalScore.toFixed(1)}
+                    <p className="tnum mt-1.5 text-xs" style={{ color: "var(--ink-2)" }}>
+                      cheap {r.cheapnessMarks.toFixed(0)} ({vsAverage(r.belowAvgPct)} avg) ·
+                      allocation {r.gapMarks.toFixed(0)}
+                      {r.targetPct !== null && (
+                        <> ({r.currentPct.toFixed(1)}% of {r.targetPct.toFixed(0)}%)</>
+                      )}
                     </p>
                   </div>
-                </li>
-              );
-            })}
+                  <p className="figure shrink-0 text-lg font-semibold">
+                    {r.finalScore.toFixed(1)}
+                  </p>
+                </div>
+              </li>
+            ))}
           </ul>
 
           {/* Desktop table */}
@@ -357,78 +352,66 @@ export default async function AdvisorPage() {
                   <th className="px-3 py-2 font-medium">ETF</th>
                   <th className="px-3 py-2 text-right font-medium">Score</th>
                   <th className="px-3 py-2 text-right font-medium">Cheapness</th>
+                  <th className="px-3 py-2 text-right font-medium">vs {CHEAPNESS_LOOKBACK}-day avg</th>
+                  <th className="px-3 py-2 text-right font-medium">Allocation</th>
                   <th className="px-3 py-2 text-right font-medium">Now / target</th>
                   <th className="px-3 py-2 text-right font-medium">Gap</th>
-                  <th className="px-3 py-2 text-right font-medium">vs NAV</th>
-                  <th className="px-5 py-2 text-right font-medium">Trend</th>
+                  <th className="px-5 py-2 text-right font-medium">vs NAV</th>
                 </tr>
               </thead>
               <tbody>
-                {ranked.map((r, i) => {
-                  const skip = skipped.find((s) => s.symbol === r.symbol);
-                  return (
-                    <tr
-                      key={r.symbol}
-                      className="border-b last:border-0"
-                      style={{ borderColor: "var(--hairline)" }}
+                {ranked.map((r, i) => (
+                  <tr
+                    key={r.symbol}
+                    className="border-b last:border-0"
+                    style={{ borderColor: "var(--hairline)" }}
+                  >
+                    <td className="tnum px-5 py-2.5" style={{ color: "var(--ink-2)" }}>
+                      {i + 1}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{r.symbol}</span>
+                        {pick?.symbol === r.symbol && <Pill tone="gain">picked</Pill>}
+                      </div>
+                    </td>
+                    <td className="tnum px-3 py-2.5 text-right font-semibold">
+                      {r.finalScore.toFixed(1)}
+                    </td>
+                    <td className="tnum px-3 py-2.5 text-right">{r.cheapnessMarks.toFixed(0)}</td>
+                    <td className="tnum px-3 py-2.5 text-right" style={{ color: "var(--ink-2)" }}>
+                      {/* Price against its average, so a discount reads as a minus. */}
+                      {signedPts(-r.belowAvgPct)}%
+                    </td>
+                    <td className="tnum px-3 py-2.5 text-right">{r.gapMarks.toFixed(0)}</td>
+                    <td className="tnum px-3 py-2.5 text-right">
+                      {r.currentPct.toFixed(1)}%
+                      <span style={{ color: "var(--ink-2)" }}>
+                        {" / "}
+                        {r.targetPct === null ? "—" : `${r.targetPct.toFixed(0)}%`}
+                      </span>
+                    </td>
+                    <td
+                      className="tnum px-3 py-2.5 text-right font-medium"
+                      style={{
+                        color:
+                          r.gapPct > 0 ? "var(--gain)" : r.gapPct < 0 ? "var(--loss)" : undefined,
+                      }}
                     >
-                      <td className="tnum px-5 py-2.5" style={{ color: "var(--ink-2)" }}>
-                        {i + 1}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">{r.symbol}</span>
-                          {pick?.symbol === r.symbol && <Pill tone="gain">picked</Pill>}
-                        </div>
-                        {skip && (
-                          <p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>
-                            {skip.reason}
-                          </p>
-                        )}
-                      </td>
-                      <td className="tnum px-3 py-2.5 text-right font-semibold">
-                        {r.finalScore.toFixed(1)}
-                      </td>
-                      <td className="tnum px-3 py-2.5 text-right">
-                        {r.cheapnessAdjusted.toFixed(1)}
-                        {r.confidence < 1 && (
-                          <span className="ml-1 text-xs" style={{ color: "var(--ink-2)" }}>
-                            ({(r.confidence * 100).toFixed(0)}%)
-                          </span>
-                        )}
-                      </td>
-                      <td className="tnum px-3 py-2.5 text-right">
-                        {r.currentPct.toFixed(1)}%
-                        <span style={{ color: "var(--ink-2)" }}>
-                          {" / "}
-                          {r.targetPct === null ? "—" : `${r.targetPct.toFixed(0)}%`}
-                        </span>
-                      </td>
-                      <td
-                        className="tnum px-3 py-2.5 text-right font-medium"
-                        style={{
-                          color:
-                            r.gapPct > 0 ? "var(--gain)" : r.gapPct < 0 ? "var(--loss)" : undefined,
-                        }}
-                      >
-                        {r.targetPct === null ? "—" : `${signedPts(r.gapPct)}pt`}
-                      </td>
-                      <td className="tnum px-3 py-2.5 text-right">
-                        {r.premiumPct === null ? (
-                          <span style={{ color: "var(--ink-2)" }}>—</span>
-                        ) : (
-                          <>
-                            {r.premiumPct >= 0 ? "+" : "−"}
-                            {Math.abs(r.premiumPct).toFixed(2)}%
-                          </>
-                        )}
-                      </td>
-                      <td className="px-5 py-2.5 text-right">
-                        <Pill>{r.label}</Pill>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      {r.targetPct === null ? "—" : `${signedPts(r.gapPct)}pt`}
+                    </td>
+                    <td className="tnum px-5 py-2.5 text-right">
+                      {r.premiumPct === null ? (
+                        <span style={{ color: "var(--ink-2)" }}>—</span>
+                      ) : (
+                        <>
+                          {r.premiumPct >= 0 ? "+" : "−"}
+                          {Math.abs(r.premiumPct).toFixed(2)}%
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -440,7 +423,7 @@ export default async function AdvisorPage() {
         <Card>
           <CardHeader
             title="Not in the running"
-            hint={`Dropped by the trend rule (under both the ${TREND_LONG}- and ${TREND_SHORT}-day averages), a premium over NAV, stale data, or less than ${settings.minCandles} sessions of history.`}
+            hint={`Dropped before marking: stale data, less than ${settings.minCandles} sessions of history, a premium over NAV, or one unit costing more than the budget.`}
           />
           <ul className="rows">
             {excluded.map((e) => (
@@ -460,8 +443,8 @@ export default async function AdvisorPage() {
         {freshness.fetchedAt && (
           <> · last updated {new Date(freshness.fetchedAt).toLocaleString("en-IN")}</>
         )}
-        . Cheapness uses a {PRICE_WINDOW}-session window. This tool reports numbers, places no
-        orders, and is not financial advice.
+        . Cheapness compares each price with its own {CHEAPNESS_LOOKBACK}-session average. This tool
+        reports numbers, places no orders, and is not financial advice.
       </p>
     </main>
   );
