@@ -57,7 +57,7 @@ rate-limited.
                NSE sessions behind; exclude any symbol whose bar lags the newest one
 2. HISTORY     need `min_candles` daily closes (default 252)
 3. PREMIUM     price too far above iNAV / NAV, absolutely or for this ETF -> discard
-4. BUDGET      discard anything one unit of which busts the budget
+4. SIZING      as many whole units as fit the budget — never fewer than one
 5. MARKS       cheapness and allocation gap, each marked 0-100 against the
                ETFs still in the running
 6. SCORE       final = 0.5 x cheapness marks + 0.5 x allocation marks
@@ -110,11 +110,18 @@ ETF is left — they all get a neutral 50 on it. Then
 
 `score = 0.5 × cheapness marks + 0.5 × allocation marks`
 
-and the highest score is recommended. Because marks are relative, the budget
-check runs first: an ETF you cannot afford would otherwise stretch the scale
-everything else is marked on.
+and the highest score is recommended.
 
-A worked example, all three at the same 14-day average of Rs.100:
+### Order size
+
+As many whole units as fit the budget at the limit price — and **never fewer
+than one**. If one unit of the pick costs more than the budget (say ₹2,505
+against ₹2,000), the advisor still recommends that one unit rather than
+skipping to a cheaper ETF, and the pick card says how far over budget it goes
+(₹505 here). The budget never removes an ETF from the running. Nothing places
+the order for you, so that warning is where you decide.
+
+A worked example of the score, all three at the same 14-day average of ₹100:
 
 | ETF | Price vs avg | Cheapness | Weight / target | Gap | Allocation | Score |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -337,8 +344,8 @@ Covers the 14-day cheapness window, 0–100 mark scaling and its ties, the 50/50
 score and the ranking it produces, the absence of a trend filter, iNAV vs EOD
 NAV selection and staleness, the premium percentile gate and noise floor,
 premium-sensitive ETFs failing closed, the NSE session calendar, stale-data
-refusal, the integrity gates (unpriced holdings, target sums), and the budget
-check — including that an unaffordable ETF never stretches the marking scale.
+refusal, the integrity gates (unpriced holdings, target sums), and order
+sizing — including the one-unit minimum when a unit costs more than the budget.
 Exits non-zero on any failure.
 
 Fixture note if you add tests: `flat(level)` makes the 14-day average exactly
