@@ -11,7 +11,7 @@ import type { PortfolioTotals } from "@/lib/valuation";
 import { Page } from "@/components/AppShell";
 import { CopyButton } from "@/components/CopyButton";
 import { RunBar } from "@/components/RunButton";
-import { BlockIcon, ChevronRightIcon } from "@/components/icons";
+import { AlertIcon, BlockIcon, ChevronRightIcon } from "@/components/icons";
 import {
   Banner,
   Card,
@@ -202,12 +202,30 @@ function PickCard({
         <div className="mt-5 grid grid-cols-3 divide-x divide-hairline rounded-xl border border-hairline bg-surface-2">
           <TicketCell label="Quantity" value={String(pick.qty)} />
           <TicketCell label="Limit price" value={`₹${rupee(pick.limitPrice)}`} />
-          <TicketCell label="Amount" value={`₹${rupee0(pick.cost)}`} />
+          <TicketCell label="Amount" value={`₹${rupee0(pick.cost)}`} warn={pick.overBudget} />
         </div>
+
+        {pick.overBudget && (
+          <div className="mt-3 flex gap-2.5 rounded-xl bg-warn-soft px-3.5 py-3 text-[13px] leading-relaxed">
+            <AlertIcon className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
+            <p>
+              <strong className="font-semibold">₹{rupee0(-pick.leftover)} over your ₹{rupee0(budget)} budget.</strong>{" "}
+              <span className="text-ink-2">
+                One unit of {pick.symbol} costs more than the budget, so this is the minimum order of one unit.
+              </span>
+            </p>
+          </div>
+        )}
 
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-relaxed text-ink-2">
-            Limit {bufferPct}% above ₹{rupee(pick.livePrice)} · ₹{rupee0(pick.leftover)} of ₹{rupee0(budget)} unspent
+            Limit {bufferPct}% above ₹{rupee(pick.livePrice)}
+            {!pick.overBudget && (
+              <>
+                {" "}
+                · ₹{rupee0(pick.leftover)} of ₹{rupee0(budget)} unspent
+              </>
+            )}
           </p>
           <CopyButton text={order} />
         </div>
@@ -262,10 +280,18 @@ function PickCard({
   );
 }
 
-function TicketCell({ label, value }: { label: string; value: string }) {
+function TicketCell({ label, value, warn = false }: { label: string; value: string; warn?: boolean }) {
   return (
     <div className="min-w-0 px-3 py-3 sm:px-4">
-      <p className="text-[11px] font-medium text-ink-2">{label}</p>
+      <p className="flex items-center gap-1 text-[11px] font-medium text-ink-2">
+        {label}
+        {warn && (
+          <>
+            <AlertIcon className="h-3 w-3 text-warn" />
+            <span className="sr-only">(over budget)</span>
+          </>
+        )}
+      </p>
       <p className="figure mt-0.5 truncate text-lg font-semibold sm:text-xl">{value}</p>
     </div>
   );
@@ -473,6 +499,7 @@ function RankRow({ r, rank, picked }: { r: Candidate; rank: number; picked: bool
           v={
             <span className="tnum">
               {r.qty} × ₹{rupee(r.limitPrice)} = ₹{rupee0(r.cost)}
+              {r.overBudget && <span className="text-warn"> · over budget</span>}
             </span>
           }
         />
@@ -526,7 +553,7 @@ function ExcludedCard({
               </span>
             </h2>
             <p className="mt-0.5 text-xs text-ink-2">
-              Stale data, under {minCandles} sessions of history, a premium over NAV, or over budget.
+              Stale data, under {minCandles} sessions of history, or a premium over NAV.
             </p>
           </div>
           <ChevronRightIcon className="chevron h-4 w-4 shrink-0 text-ink-2" />

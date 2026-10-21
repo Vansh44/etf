@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 const STATES = [
   { state: "", label: "Normal" },
   { state: "warn", label: "Warning" },
+  { state: "overbudget", label: "Over budget" },
   { state: "nobuy", label: "No buy" },
   { state: "stale", label: "Stale" },
   { state: "empty", label: "Empty" },

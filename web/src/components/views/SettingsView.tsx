@@ -65,7 +65,7 @@ export function SettingsView({ settings, emails, me, theme }: SettingsData) {
             <NumberField
               name="budget"
               label="Budget per run"
-              hint="How much to spend each time. Nothing tracks how often you run it."
+              hint="How much to spend each time. If one unit of the pick costs more, it still suggests one unit and shows how far over budget that goes."
               value={settings.budget}
               min="1"
               step="1"

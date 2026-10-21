@@ -18,11 +18,13 @@ import {
 } from "@/lib/strategy";
 import { valuePortfolio } from "@/lib/valuation";
 
-export type PreviewState = "default" | "nobuy" | "stale" | "warn" | "empty";
+export type PreviewState = "default" | "nobuy" | "overbudget" | "stale" | "warn" | "empty";
 
 export function parseState(raw: string | string[] | undefined): PreviewState {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  return value === "nobuy" || value === "stale" || value === "warn" || value === "empty" ? value : "default";
+  return value === "nobuy" || value === "overbudget" || value === "stale" || value === "warn" || value === "empty"
+    ? value
+    : "default";
 }
 
 const WATCHLIST: WatchlistItem[] = [
@@ -142,7 +144,10 @@ function buildPrices(state: PreviewState, now: number): Map<string, PriceData> {
 export function previewSettings(state: PreviewState): Settings {
   return {
     ...DEFAULT_SETTINGS,
-    budget: state === "nobuy" ? 10 : DEFAULT_SETTINGS.budget,
+    // A budget below one unit of the pick: it is still recommended, as one unit.
+    budget: state === "overbudget" ? 50 : DEFAULT_SETTINGS.budget,
+    // Every ETF trades a little above NAV, so a 0% cap refuses them all.
+    maxPremiumPct: state === "nobuy" ? 0 : DEFAULT_SETTINGS.maxPremiumPct,
     nseHolidays: ["2026-10-02", "2026-10-20", "2026-11-09", "2026-12-25"],
   };
 }

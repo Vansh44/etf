@@ -8,7 +8,8 @@
  *                      session; exclude any symbol behind the newest bar
  *   2. HISTORY         need `minCandles` daily closes
  *   3. PREMIUM         price unusually far above iNAV -> discard
- *   4. BUDGET          discard anything one unit of which busts the budget
+ *   4. SIZING          as many whole units as fit the budget — and never fewer
+ *                      than one, even when one unit costs more than the budget
  *   5. MARKS           two metrics, each marked 0-100 against the ETFs still in
  *                      the running:
  *                        cheapness  how far below its own 14-day average it
@@ -19,9 +20,12 @@
  *   7. RECOMMEND       the highest score
  *
  * Marks are RELATIVE: they say how an ETF compares with the others eligible
- * today, not how cheap it is in any absolute sense. That is why the budget
- * check runs before marking — an ETF you cannot buy must not stretch the scale
- * everything else is marked on.
+ * today, not how cheap it is in any absolute sense.
+ *
+ * The budget never removes an ETF from the running. A pick whose single unit
+ * costs more than the budget is still recommended, as one unit, and flagged
+ * `overBudget` so the screen says by how much. The app places no orders, so
+ * that flag — not a silent skip to the next ETF — is the safeguard.
  *
  * Cheapness is a raw percentage, so ETFs that swing further (MON100, small
  * caps) take the top cheapness marks more often than steady ones. The gap half
@@ -187,7 +191,13 @@ export type WatchlistItem = {
   premiumSensitive?: boolean;
 };
 
-export type OrderSize = { qty: number; limitPrice: number; cost: number };
+export type OrderSize = {
+  qty: number;
+  limitPrice: number;
+  cost: number;
+  /** One unit alone costs more than the budget, so this is the one-unit minimum. */
+  overBudget: boolean;
+};
 
 export type Candidate = {
   symbol: string;
@@ -222,6 +232,7 @@ export type HoldingRow = {
 };
 
 export type Recommendation = Candidate & {
+  /** Budget minus cost. Negative when `overBudget`: how far the one unit goes over. */
   leftover: number;
   /** Weight after this purchase, valued at the live price, not the limit. */
   projectedPct: number;
@@ -249,7 +260,7 @@ export type StrategyResult = {
   portfolio: { rows: HoldingRow[]; total: number };
   /** Every ETF that was marked, highest score first. */
   ranked: Candidate[];
-  /** Dropped by staleness, thin history, premium or budget, before marking. */
+  /** Dropped by staleness, thin history or premium, before marking. */
   excluded: Excluded[];
   recommendation: Recommendation | null;
   /** Set when there is no recommendation. */
@@ -538,9 +549,17 @@ export function sizeOrder(
   const raw = livePrice * (1 + limitBufferPct / 100);
   const limitPrice = Math.round(raw / NSE_TICK) * NSE_TICK;
   const rounded = Number(limitPrice.toFixed(2));
-  if (rounded <= 0) return { qty: 0, limitPrice: 0, cost: 0 };
-  const qty = Math.floor(budget / rounded);
-  return { qty, limitPrice: rounded, cost: Number((qty * rounded).toFixed(2)) };
+  if (rounded <= 0) return { qty: 0, limitPrice: 0, cost: 0, overBudget: false };
+  // Whole units only (NSE has no fractional ETF units) — but at least one, so
+  // a pick priced above the budget is still bought rather than skipped.
+  const fits = Math.floor(budget / rounded);
+  const qty = Math.max(1, fits);
+  return {
+    qty,
+    limitPrice: rounded,
+    cost: Number((qty * rounded).toFixed(2)),
+    overBudget: fits < 1,
+  };
 }
 
 // ─── the pipeline ───────────────────────────────────────────────────────────
@@ -702,15 +721,11 @@ export function runStrategy(input: StrategyInput): StrategyResult {
       );
     }
 
-    // 4. budget — before marking, so an ETF you cannot buy never stretches the
-    //    scale the others are marked on.
+    // 4. sizing — never excludes on budget; see the module comment. qty is 0
+    //    only for a price that rounds to nothing at NSE's one-paisa tick.
     const order = sizeOrder(priceData.livePrice, settings.budget, settings.limitBufferPct);
     if (order.qty < 1) {
-      excluded.push({
-        symbol,
-        name,
-        reason: `one unit costs ₹${order.limitPrice.toFixed(2)}, over the ₹${settings.budget.toFixed(2)} budget`,
-      });
+      excluded.push({ symbol, name, reason: "price is too small to size an order" });
       continue;
     }
 

@@ -15,6 +15,7 @@ import {
   scaleMarks,
   scoreCheapness,
   sessionsBetween,
+  sizeOrder,
   type PriceData,
   type Settings,
   type WatchlistItem,
@@ -516,7 +517,7 @@ console.log("\n── INTEGRITY GATES ──");
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-console.log("\n── BUDGET AND PROJECTION ──");
+console.log("\n── BUDGET, SIZING AND PROJECTION ──");
 {
   const r = runStrategy({
     watchlist: [{ symbol: "A", name: "a", targetPct: 100 }],
@@ -527,25 +528,36 @@ console.log("\n── BUDGET AND PROJECTION ──");
     nowMs: NOW,
   });
   const rec = r.recommendation!;
-  ok("cost stays inside the budget", rec.cost <= SETTINGS.budget, `cost=${rec.cost}`);
   check("limit price sits limitBufferPct above live", rec.limitPrice, 100.2);
+  check("as many whole units as the budget allows", rec.qty, 24);
+  ok("cost stays inside the budget", rec.cost <= SETTINGS.budget, `cost=${rec.cost}`);
+  check("and is not flagged", rec.overBudget, false);
+  check("leftover is what the budget did not use", rec.leftover, 95.2, 1e-9);
   ok("projected weight is reported", rec.projectedPct > 0);
+}
 
-  const dear = runStrategy({
-    watchlist: [{ symbol: "A", name: "a", targetPct: 100 }],
+// The case this rule exists for: one unit of the pick costs more than the budget.
+{
+  const r = runStrategy({
+    watchlist: [{ symbol: "DEAR", name: "one unit over budget", targetPct: 100 }],
     holdings: [],
-    settings: SETTINGS,
-    prices: new Map([["A", priceRow({ symbol: "A", closes: flat(9000), livePrice: 9000 })]]),
+    settings: { ...SETTINGS, budget: 2000 },
+    prices: new Map([["DEAR", priceRow({ symbol: "DEAR", closes: flat(2500), livePrice: 2500 })]]),
     priceFailures: [],
     nowMs: NOW,
   });
-  ok("unaffordable single unit yields no recommendation", dear.recommendation === null);
-  ok("and says why",
-     dear.excluded.some((e) => e.symbol === "A" && e.reason.includes("over the ₹2500.00 budget")),
-     JSON.stringify(dear.excluded));
+  const rec = r.recommendation;
+  check("a pick costing ₹2,505 a unit on a ₹2,000 budget is still recommended", rec?.symbol, "DEAR");
+  check("as the minimum of one unit", rec?.qty, 1);
+  check("costing that one unit", rec?.cost, 2505);
+  check("flagged as over budget", rec?.overBudget, true);
+  check("with leftover showing how far over", rec?.leftover, -505, 1e-9);
+  check("and nothing is excluded for it", r.excluded, []);
+}
 
-  // An ETF you cannot afford must not stretch the scale the others are marked on.
-  const mixed = runStrategy({
+// The over-budget pick is not skipped in favour of an affordable runner-up.
+{
+  const r = runStrategy({
     watchlist: [
       { symbol: "PRICEY", name: "pricey", targetPct: 34 },
       { symbol: "B", name: "b", targetPct: 33 },
@@ -554,7 +566,7 @@ console.log("\n── BUDGET AND PROJECTION ──");
     holdings: [],
     settings: SETTINGS,
     prices: new Map([
-      // 10% under its average — would take the 100 if it were marked.
+      // 10% under its average and the biggest target: tops both marks.
       ["PRICEY", priceRow({ symbol: "PRICEY", closes: flat(10_000), livePrice: 9000 })],
       ["B", priceRow({ symbol: "B", livePrice: 98 })],
       ["C", priceRow({ symbol: "C", livePrice: 100 })],
@@ -562,11 +574,20 @@ console.log("\n── BUDGET AND PROJECTION ──");
     priceFailures: [],
     nowMs: NOW,
   });
-  ok("the unaffordable ETF is excluded before marking",
-     mixed.excluded.some((e) => e.symbol === "PRICEY") &&
-       !mixed.ranked.some((c) => c.symbol === "PRICEY"));
-  check("so the deepest discount left still gets the full 100",
-        mixed.ranked.find((c) => c.symbol === "B")?.cheapnessMarks, 100);
+  check("an ETF over budget is still marked", r.ranked.find((c) => c.symbol === "PRICEY")?.cheapnessMarks, 100);
+  check("and wins when it scores highest", r.recommendation?.symbol, "PRICEY");
+  check("as one unit", r.recommendation?.qty, 1);
+}
+
+// The boundary: one unit exactly at the budget fits; one paisa under does not.
+{
+  check("one unit exactly at budget is not over", sizeOrder(100, 100.2, 0.2), {
+    qty: 1, limitPrice: 100.2, cost: 100.2, overBudget: false,
+  });
+  check("a paisa short of one unit -> one unit, over budget", sizeOrder(100, 100.19, 0.2), {
+    qty: 1, limitPrice: 100.2, cost: 100.2, overBudget: true,
+  });
+  check("room for more than one unit is never flagged", sizeOrder(100, 250, 0.2).overBudget, false);
 }
 
 console.log(`\n${fail === 0 ? "✅ ALL PASS" : "❌ FAILURES"} — ${pass} passed, ${fail} failed\n`);
