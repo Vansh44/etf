@@ -14,7 +14,8 @@ const API = "https://api.github.com";
 export type DispatchOutcome =
   | { status: "dispatched" }
   | { status: "not-configured"; detail: string }
-  | { status: "failed"; detail: string };
+  /** `href` is where on GitHub the fix lives, when there is one place to send you. */
+  | { status: "failed"; detail: string; href?: string };
 
 export function isDispatchConfigured(): boolean {
   return Boolean(process.env.GITHUB_TOKEN && process.env.GITHUB_REPO);
@@ -71,11 +72,35 @@ export async function dispatchPriceFetch(): Promise<DispatchOutcome> {
           "repository (fine-grained token) or the workflow scope (classic token).",
       };
     }
-    return { status: "failed", detail: `GitHub returned HTTP ${res.status}: ${body.slice(0, 200)}` };
+    // GitHub switches off scheduled workflows in a public repo after 60 days
+    // without a commit, and a disabled workflow refuses dispatch too. Pushing
+    // again does not switch it back on — only the Enable button does.
+    if (res.status === 422 && body.includes("disabled workflow")) {
+      return {
+        status: "failed",
+        detail:
+          "GitHub has switched off the price-fetch workflow, so prices can't refresh. It does this to " +
+          "scheduled workflows in a public repo after 60 days without a commit, and a new commit doesn't " +
+          "undo it. Open the workflow on GitHub, press Enable workflow, then Refresh here.",
+        href: `https://github.com/${repo}/actions/workflows/${encodeURIComponent(workflow)}`,
+      };
+    }
+    return { status: "failed", detail: `GitHub returned HTTP ${res.status}: ${githubMessage(body)}` };
   } catch (err) {
     return {
       status: "failed",
       detail: err instanceof Error ? err.message : String(err),
     };
   }
+}
+
+/** The human sentence out of a GitHub error body, rather than its raw JSON. */
+function githubMessage(body: string): string {
+  try {
+    const message = (JSON.parse(body) as { message?: unknown }).message;
+    if (typeof message === "string" && message) return message;
+  } catch {
+    // Not JSON — fall through to the raw text.
+  }
+  return body.slice(0, 200);
 }

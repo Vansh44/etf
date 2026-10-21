@@ -124,9 +124,19 @@ export function RunBar({
       )}
 
       {state.phase === "error" && (
-        <p role="alert" className="rounded-xl bg-loss-soft px-3 py-2 text-xs font-medium leading-relaxed text-loss">
-          {state.error}
-        </p>
+        <div role="alert" className="rounded-xl bg-loss-soft px-3.5 py-3 text-xs leading-relaxed">
+          <p className="font-medium text-loss">{state.error}</p>
+          {state.href && (
+            <a
+              href={state.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${buttonClass("secondary", "sm")} mt-2.5 w-full sm:w-auto`}
+            >
+              Open the workflow on GitHub
+            </a>
+          )}
+        </div>
       )}
     </div>
   );

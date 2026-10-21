@@ -19,7 +19,7 @@ export type RunState =
   | { phase: "idle" }
   | { phase: "fetching"; since: string | null; note?: string }
   | { phase: "ready"; note?: string }
-  | { phase: "error"; error: string };
+  | { phase: "error"; error: string; href?: string };
 
 /**
  * Kick off a price refresh. Returns immediately with the timestamp of the
@@ -47,7 +47,7 @@ export async function startRun(): Promise<RunState> {
     revalidatePath("/");
     return { phase: "ready", note: outcome.detail };
   }
-  return { phase: "error", error: outcome.detail };
+  return { phase: "error", error: outcome.detail, href: outcome.href };
 }
 
 /**
