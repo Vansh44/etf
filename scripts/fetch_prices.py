@@ -96,6 +96,17 @@ def die(message: str) -> None:
     sys.exit(1)
 
 
+def annotate(message: str) -> None:
+    """
+    A warning that must not stay buried in the log. Under GitHub Actions it is
+    also raised as an annotation, so it shows on the run's summary page — a
+    green tick otherwise hides a fetch that quietly lost its NAVs.
+    """
+    log.warning(f"  ⚠ {message}")
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        print(f"::warning title=fetch_prices::{message}", flush=True)
+
+
 def key_role(key: str):
     """
     Which Supabase role this key carries, or None if it can't be determined.
@@ -231,26 +242,83 @@ def nav_by_isin() -> dict:
         )
         response.raise_for_status()
         out = {}
-        for line in response.text.splitlines():
-            parts = line.split(";")
-            if len(parts) < 6:
-                continue
-            try:
-                nav = float(parts[4].strip())
-            except ValueError:
-                continue          # header rows and section headings
-            if nav <= 0:
-                continue
-            iso = _amfi_date(parts[5].strip())
+        for isins, nav, iso in _amfi_rows(response.text.splitlines()):
             # Both ISIN columns (growth / reinvestment) point at the same scheme.
-            for isin in (parts[1].strip(), parts[2].strip()):
-                if isin and isin != "-":
-                    out[isin] = (nav, iso)
+            for isin in isins:
+                out[isin] = (nav, iso)
         log.info(f"  AMFI NAV rows indexed: {len(out)}")
+        if not out:
+            annotate(
+                "AMFI's NAV file parsed to zero NAVs — its layout has probably changed again. "
+                "Prices are still written, but the premium check is off until _amfi_columns is fixed."
+            )
         return out
     except Exception as exc:
         log.warning(f"  ⚠ Could not read AMFI NAVs ({exc}); prices will have no NAV.")
         return {}
+
+
+def _amfi_columns(header: list):
+    """
+    {role: index} from an AMFI header row, or None if it isn't one we know.
+
+    Found by NAME, never by position: AMFI reorders these files without notice.
+    In October 2026 NAVAll.txt gained Plan and Option columns ahead of the NAV,
+    and the history report moved both ISINs behind them — a fixed index read
+    "Direct Plan" as the NAV, failed to parse it, and silently skipped every
+    row. These are the names both files use, before and after that change:
+
+      Scheme Code ; ISIN Div Payout/ ISIN Growth ; ISIN Div Reinvestment ;
+      Scheme Name / NAV Name ; [Plan ; Option ;] Net Asset Value ; [...] ; Date
+    """
+    cols = {}
+    for i, name in enumerate(n.strip().lower() for n in header):
+        if "reinvest" in name:
+            cols["isin_reinv"] = i
+        elif "isin" in name:
+            cols["isin"] = i
+        elif name == "net asset value":
+            cols["nav"] = i
+        elif name == "date":
+            cols["date"] = i
+    return cols if {"isin", "nav", "date"} <= cols.keys() else None
+
+
+def _amfi_rows(lines):
+    """
+    (isins, nav, iso_date) per scheme from an AMFI NAV file, in either layout.
+
+    Everything before the "Scheme Code" header, and every section heading or
+    fund-house name after it, is skipped — those lines have no NAV to parse.
+    """
+    cols = None
+    for line in lines:
+        if not line or not line.strip():
+            continue
+        parts = [p.strip() for p in line.split(";")]
+        if cols is None:
+            if parts[0].lower().startswith("scheme code"):
+                cols = _amfi_columns(parts)
+                if cols is None:
+                    annotate(f"AMFI header not recognised, so no NAVs were read: {line[:160]!r}")
+                    return
+            continue
+        if len(parts) <= max(cols.values()):
+            continue
+        try:
+            nav = float(parts[cols["nav"]])
+        except ValueError:
+            continue
+        iso = _amfi_date(parts[cols["date"]])
+        if nav <= 0 or not iso:
+            continue
+        isins = [
+            parts[i]
+            for i in (cols["isin"], cols.get("isin_reinv"))
+            if i is not None and parts[i] and parts[i] != "-"
+        ]
+        if isins:
+            yield isins, nav, iso
 
 
 def _amfi_date(raw: str):
@@ -362,26 +430,13 @@ def _parse_nav_history(response, isin_to_symbol: dict) -> dict:
     Streamed and filtered line by line: the report covers every scheme in the
     country, so a month of it is ~20 MB of which a handful of rows matter.
 
-    The column order is NOT the same as NAVAll.txt — this file leads with the
-    scheme name, pushing both ISINs one place right and the date to the end:
-      code ; name ; isin ; isin_reinv ; nav ; repurchase ; sale ; date
+    Its columns are in a different order from NAVAll.txt and have moved on
+    their own; _amfi_rows finds them by header name either way.
     """
     out = {}
-    for line in response.iter_lines(decode_unicode=True):
-        if not line:
-            continue
-        parts = line.split(";")
-        if len(parts) < 8:
-            continue
-        symbol = isin_to_symbol.get(parts[2].strip()) or isin_to_symbol.get(parts[3].strip())
-        if symbol is None:
-            continue
-        try:
-            nav = float(parts[4].strip())
-        except ValueError:
-            continue
-        iso = _amfi_date(parts[7].strip())
-        if nav > 0 and iso:
+    for isins, nav, iso in _amfi_rows(response.iter_lines(decode_unicode=True)):
+        symbol = next((isin_to_symbol[i] for i in isins if i in isin_to_symbol), None)
+        if symbol is not None:
             out.setdefault(symbol, {})[iso] = nav
     return out
 
@@ -586,7 +641,7 @@ def main() -> None:
     if skipped:
         log.warning(f"Skipped: {'; '.join(skipped)}")
     if no_nav:
-        log.warning(f"No NAV found for: {', '.join(no_nav)} — premium check will be skipped for these.")
+        annotate(f"No NAV found for: {', '.join(no_nav)} — premium check will be skipped for these.")
 
     if not rows:
         die("Nothing usable fetched — refusing to write. Leaving existing prices in place.")
