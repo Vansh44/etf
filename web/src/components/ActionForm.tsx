@@ -3,24 +3,28 @@
 import { useActionState, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import type { ActionResult } from "@/app/actions";
+import { buttonClass } from "@/components/ui";
 
 type Action = (formData: FormData) => Promise<ActionResult>;
 
 /**
  * Wraps a Server Action so failures surface inline instead of vanishing.
- * Clears the form on success when `resetOnSuccess` is set.
+ * Clears the form on success when `resetOnSuccess` is set, and folds away the
+ * row it sits in when `collapseOnSuccess` is — an edit that saved is done.
  */
 export function ActionForm({
   action,
   children,
   className,
   resetOnSuccess = false,
+  collapseOnSuccess = false,
   confirm,
 }: {
   action: Action;
   children: React.ReactNode;
   className?: string;
   resetOnSuccess?: boolean;
+  collapseOnSuccess?: boolean;
   confirm?: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -29,6 +33,7 @@ export function ActionForm({
     async (_prev: ActionResult | null, formData: FormData) => {
       const result = await action(formData);
       if (result.ok && resetOnSuccess) formRef.current?.reset();
+      if (result.ok && collapseOnSuccess) formRef.current?.closest("details")?.removeAttribute("open");
       return result;
     },
     null,
@@ -45,7 +50,9 @@ export function ActionForm({
     >
       {children}
       {state && !state.ok && (
-        <p className="mt-2 text-sm text-red-600 dark:text-red-400">{state.error}</p>
+        <p role="alert" className="mt-2 text-sm font-medium text-loss">
+          {state.error}
+        </p>
       )}
     </form>
   );
@@ -56,29 +63,19 @@ export function SubmitButton({
   children,
   pendingText,
   variant = "primary",
+  size = "md",
   className = "",
 }: {
   children: React.ReactNode;
   pendingText?: string;
-  variant?: "primary" | "ghost" | "danger";
+  variant?: "primary" | "secondary" | "ghost" | "danger";
+  size?: "md" | "sm";
   className?: string;
 }) {
   const { pending } = useFormStatus();
 
-  const styles = {
-    primary:
-      "bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white",
-    ghost:
-      "border border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800",
-    danger: "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40",
-  }[variant];
-
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 ${styles} ${className}`}
-    >
+    <button type="submit" disabled={pending} className={`${buttonClass(variant, size)} ${className}`}>
       {pending && pendingText ? pendingText : children}
     </button>
   );

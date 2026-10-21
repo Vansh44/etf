@@ -272,12 +272,30 @@ yourself out entirely.
 | **Advisor** | Runs the strategy: recommendation with its score breakdown, ranking, excluded ETFs and why, warnings, portfolio summary |
 | **Watchlist** | ETFs the advisor may recommend, each one's target allocation, and whether it can trade far from NAV. Use exact NSE symbols |
 | **Portfolio** | What you own, with average buy prices for P&L. Include ETFs *not* on the watchlist — they count toward your total |
-| **Settings** | Budget, premium limits, history and freshness limits, NSE holidays, limit buffer, and the email allowlist. The 50/50 score split is fixed in code |
+| **Settings** | Light / dark / follow-the-phone theme, budget, premium limits, history and freshness limits, NSE holidays, limit buffer, and the email allowlist. The 50/50 score split is fixed in code |
 
 Prices are whatever the last Action run wrote. The dashboard shows the newest
 session on file and when the fetcher last ran, and refuses to recommend
 anything once the data is more than `max_bar_age_sessions` NSE sessions behind
 — that usually means the scheduled job failed, so check the Actions tab.
+
+**On a phone**, open the site and use *Add to Home Screen* (Safari's share
+sheet, or Chrome's menu). It installs with its own icon and opens full-screen
+with the bottom tab bar, like a native app. **Copy order** on the pick card
+puts `SYMBOL BUY qty @ price LIMIT` on the clipboard for pasting into Groww.
+
+### Design preview
+
+`npm run dev`, then open <http://localhost:3000/preview>. Every screen renders
+from sample data (`src/app/preview/fixtures.ts`) scored by the real strategy —
+no database, no sign-in. The strip under the header switches between the
+normal, warning, no-buy, stale and empty states. It exists only under
+`next dev`: the proxy lets `/preview` through unauthenticated in development
+only, and a production build serves a 404 there.
+
+The screens themselves live in `src/components/views/`; each page in
+`src/app/(app)/` only fetches data and hands it to its view, which is what
+lets the preview render them without Supabase.
 
 ---
 

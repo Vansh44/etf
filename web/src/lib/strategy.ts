@@ -508,7 +508,7 @@ export function premiumVerdict(
 
   if (premium.premiumPct > settings.maxPremiumPct) {
     return (
-      `trading ${shown}% above ${src} Rs.${ref}, past the ${settings.maxPremiumPct}% ` +
+      `trading ${shown}% above ${src} ₹${ref}, past the ${settings.maxPremiumPct}% ` +
       `absolute limit — you would be paying well over the underlying value`
     );
   }
@@ -519,7 +519,7 @@ export function premiumVerdict(
     premium.premiumPctile > settings.maxPremiumPctile
   ) {
     return (
-      `${shown}% above ${src} Rs.${ref} is the ${premium.premiumPctile.toFixed(0)}th ` +
+      `${shown}% above ${src} ₹${ref} is the ${premium.premiumPctile.toFixed(0)}th ` +
       `percentile of its own ${premium.premiumSamples}-session history ` +
       `(limit ${settings.maxPremiumPctile}th) — unusually expensive for this ETF`
     );
@@ -709,7 +709,7 @@ export function runStrategy(input: StrategyInput): StrategyResult {
       excluded.push({
         symbol,
         name,
-        reason: `one unit costs Rs.${order.limitPrice.toFixed(2)}, over the Rs.${settings.budget.toFixed(2)} budget`,
+        reason: `one unit costs ₹${order.limitPrice.toFixed(2)}, over the ₹${settings.budget.toFixed(2)} budget`,
       });
       continue;
     }

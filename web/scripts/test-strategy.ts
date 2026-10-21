@@ -541,7 +541,7 @@ console.log("\n── BUDGET AND PROJECTION ──");
   });
   ok("unaffordable single unit yields no recommendation", dear.recommendation === null);
   ok("and says why",
-     dear.excluded.some((e) => e.symbol === "A" && e.reason.includes("over the Rs.2500.00 budget")),
+     dear.excluded.some((e) => e.symbol === "A" && e.reason.includes("over the ₹2500.00 budget")),
      JSON.stringify(dear.excluded));
 
   // An ETF you cannot afford must not stretch the scale the others are marked on.

@@ -1,80 +1,52 @@
 /**
  * Loading skeletons.
  *
- * Shaped like the real content so the page doesn't jump when data arrives —
+ * Shaped like the real screens so the page doesn't jump when data arrives —
  * the point is to show structure, not to entertain. The shimmer is disabled
  * under prefers-reduced-motion by the rule in globals.css.
  */
 
-export function Bar({ w = "100%", h = 12 }: { w?: string; h?: number }) {
+import { Page } from "@/components/AppShell";
+
+export function Bar({ w = "100%", h = 12, round = false }: { w?: string; h?: number; round?: boolean }) {
   return (
     <span
-      className="skeleton block rounded-md"
+      className={`skeleton block ${round ? "rounded-full" : "rounded-md"}`}
       style={{ width: w, height: h }}
       aria-hidden="true"
     />
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div
-      className="rounded-2xl border"
-      style={{ borderColor: "var(--hairline)", background: "var(--surface)" }}
-    >
+    <div className={`overflow-hidden rounded-2xl border border-hairline bg-surface shadow-card ${className}`}>
       {children}
     </div>
   );
 }
 
-function TileSkeleton() {
-  return (
-    <div
-      className="rounded-xl border px-4 py-3.5"
-      style={{ borderColor: "var(--hairline)", background: "var(--plane)" }}
-    >
-      <Bar w="55%" h={10} />
-      <div className="mt-2">
-        <Bar w="75%" h={22} />
-      </div>
-    </div>
-  );
-}
-
-/** Rows of tiles — matches the KPI grids. */
-export function TileGridSkeleton({ count = 4, cols = 4 }: { count?: number; cols?: 3 | 4 }) {
-  return (
-    <div
-      className={`grid grid-cols-2 gap-2.5 sm:gap-3 ${
-        cols === 3 ? "sm:grid-cols-3" : "sm:grid-cols-4"
-      }`}
-    >
-      {Array.from({ length: count }, (_, i) => (
-        <TileSkeleton key={i} />
-      ))}
-    </div>
-  );
-}
-
-/** Card with a header and a list of rows — matches ranking / holdings. */
+/** A card header followed by broker-style rows. */
 export function ListCardSkeleton({ rows = 5 }: { rows?: number }) {
   return (
     <Shell>
-      <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--hairline)" }}>
-        <Bar w="38%" h={14} />
+      <div className="border-b border-hairline px-4 py-3.5 sm:px-5">
+        <Bar w="30%" h={14} />
         <div className="mt-2">
-          <Bar w="70%" h={10} />
+          <Bar w="72%" h={10} />
         </div>
       </div>
       <div className="rows">
         {Array.from({ length: rows }, (_, i) => (
-          <div key={i} className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
-            <Bar w="6rem" h={14} />
-            <span className="flex-1" />
-            <span className="hidden sm:block">
-              <Bar w="4rem" h={12} />
-            </span>
-            <Bar w="3.5rem" h={12} />
+          <div key={i} className="space-y-2 px-4 py-4 sm:px-5">
+            <div className="flex items-center justify-between gap-4">
+              <Bar w="38%" h={14} />
+              <Bar w="3.5rem" h={14} />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <Bar w="55%" h={10} />
+              <Bar w="4.5rem" h={10} />
+            </div>
           </div>
         ))}
       </div>
@@ -82,88 +54,98 @@ export function ListCardSkeleton({ rows = 5 }: { rows?: number }) {
   );
 }
 
-/** The Advisor page's own shape: run bar, recommendation, ranking. */
+/** Advisor: status strip, today's pick, ranking. */
 export function AdvisorSkeleton() {
   return (
-    <main className="mx-auto max-w-6xl space-y-4 p-3 sm:space-y-5 sm:p-6">
-      <Shell>
-        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-          <div className="min-w-0 flex-1">
-            <Bar w="60%" h={18} />
-            <div className="mt-2">
-              <Bar w="80%" h={11} />
+    <Page>
+      <div className="flex items-center justify-between px-1">
+        <Bar w="11rem" h={12} />
+        <Bar w="6rem" h={36} round />
+      </div>
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+        <div className="space-y-3 sm:space-y-4">
+          <Shell>
+            <div className="p-4 sm:p-5">
+              <Bar w="7rem" h={14} />
+              <div className="mt-4 flex items-end justify-between gap-4">
+                <div className="flex-1 space-y-2">
+                  <Bar w="55%" h={28} />
+                  <Bar w="75%" h={12} />
+                </div>
+                <Bar w="4.5rem" h={28} />
+              </div>
+              <div className="mt-5">
+                <Bar w="100%" h={68} />
+              </div>
+              <div className="mt-3">
+                <Bar w="100%" h={44} />
+              </div>
             </div>
-          </div>
-          <Bar w="12rem" h={44} />
+            <div className="space-y-4 border-t border-hairline p-4 sm:p-5">
+              {[0, 1].map((i) => (
+                <div key={i} className="space-y-2">
+                  <Bar w="40%" h={12} />
+                  <Bar w="100%" h={6} round />
+                </div>
+              ))}
+            </div>
+          </Shell>
+          <ListCardSkeleton rows={5} />
         </div>
-      </Shell>
-
-      <Shell>
-        <div className="p-4 sm:p-5">
-          <Bar w="4rem" h={18} />
-          <div className="mt-3">
-            <Bar w="45%" h={26} />
-          </div>
-          <div className="mt-1.5">
-            <Bar w="70%" h={12} />
-          </div>
-          <div className="mt-4">
-            <TileGridSkeleton count={3} cols={3} />
-          </div>
-          <div className="mt-4 space-y-2">
-            <Bar w="90%" h={12} />
-            <Bar w="75%" h={12} />
-            <Bar w="60%" h={12} />
-          </div>
+        <div className="hidden lg:block">
+          <Shell>
+            <div className="space-y-3 p-5">
+              <Bar w="5rem" h={10} />
+              <Bar w="60%" h={28} />
+              <Bar w="40%" h={12} />
+            </div>
+          </Shell>
         </div>
-      </Shell>
-
-      <ListCardSkeleton rows={6} />
-    </main>
+      </div>
+    </Page>
   );
 }
 
-/** The Portfolio page's shape: hero value, tiles, holdings. */
+/** Portfolio: the current-value headline, then holdings. */
 export function PortfolioSkeleton() {
   return (
-    <main className="mx-auto max-w-6xl space-y-4 p-3 sm:space-y-5 sm:p-6">
+    <Page>
       <Shell>
-        <div className="p-4 sm:p-5">
+        <div className="p-4 sm:p-6">
           <Bar w="6rem" h={10} />
-          <div className="mt-2">
+          <div className="mt-3">
             <Bar w="55%" h={40} />
           </div>
           <div className="mt-3">
-            <Bar w="40%" h={16} />
+            <Bar w="35%" h={14} />
           </div>
-          <div className="mt-4">
-            <TileGridSkeleton count={3} cols={3} />
+          <div className="mt-5 grid grid-cols-2 gap-4 border-t border-hairline pt-4 sm:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className={`space-y-2 ${i === 2 ? "hidden sm:block" : ""}`}>
+                <Bar w="50%" h={10} />
+                <Bar w="70%" h={18} />
+              </div>
+            ))}
           </div>
         </div>
       </Shell>
       <ListCardSkeleton rows={6} />
-    </main>
+    </Page>
   );
 }
 
-/** Generic form-ish page: watchlist and settings. */
+/** Watchlist and Settings: a summary card, then a list. */
 export function FormPageSkeleton({ rows = 5 }: { rows?: number }) {
   return (
-    <main className="mx-auto max-w-3xl space-y-4 p-3 sm:space-y-5 sm:p-6">
+    <Page width="narrow">
       <Shell>
-        <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--hairline)" }}>
-          <Bar w="30%" h={14} />
-          <div className="mt-2">
-            <Bar w="85%" h={10} />
-          </div>
-        </div>
-        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:p-5">
-          <Bar w="100%" h={44} />
-          <Bar w="100%" h={44} />
-          <Bar w="5rem" h={44} />
+        <div className="space-y-3 p-4 sm:p-5">
+          <Bar w="6rem" h={10} />
+          <Bar w="45%" h={28} />
+          <Bar w="100%" h={8} round />
         </div>
       </Shell>
       <ListCardSkeleton rows={rows} />
-    </main>
+    </Page>
   );
 }

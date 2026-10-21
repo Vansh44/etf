@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { BlockIcon } from "@/components/icons";
+import { buttonClass } from "@/components/ui";
 
 export default async function NotAllowedPage({
   searchParams,
@@ -8,32 +10,26 @@ export default async function NotAllowedPage({
   const { email } = await searchParams;
 
   return (
-    <main className="flex min-h-dvh items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-          Not on the allowlist
-        </h1>
-        <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
+    <main className="flex min-h-dvh items-center justify-center p-5">
+      <div className="w-full max-w-md rounded-3xl border border-hairline bg-surface p-7 shadow-card sm:p-9">
+        <span className="grid h-12 w-12 place-items-center rounded-full bg-loss-soft text-loss">
+          <BlockIcon className="h-6 w-6" />
+        </span>
+        <h1 className="mt-5 text-xl font-semibold">Not on the allowlist</h1>
+        <p className="mt-2 text-sm leading-relaxed text-ink-2">
           {email ? (
             <>
-              <span className="font-medium text-slate-900 dark:text-slate-200">{email}</span>{" "}
-              signed in with Google successfully, but that address is not allowed to use this
-              app. You have been signed out again.
+              <span className="font-medium text-ink">{email}</span> signed in with Google, but that address isn&apos;t
+              allowed to use this app. You&apos;ve been signed out again.
             </>
           ) : (
-            <>
-              That Google account is not allowed to use this app. You have been signed out
-              again.
-            </>
+            <>That Google account isn&apos;t allowed to use this app. You&apos;ve been signed out again.</>
           )}
         </p>
-        <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
-          To grant access, sign in with an allowed address and add this email under Settings.
+        <p className="mt-2 text-sm leading-relaxed text-ink-2">
+          To grant access, sign in with an allowed address and add this one under Settings.
         </p>
-        <Link
-          href="/login"
-          className="mt-6 inline-flex rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
-        >
+        <Link href="/login" className={`${buttonClass("primary")} mt-7 w-full`}>
           Try a different account
         </Link>
       </div>
