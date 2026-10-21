@@ -3,84 +3,140 @@
 /* ─────────────────────────────────────────────────────────────
    Design tokens.
 
-   Values come from a validated reference palette; the ones used here were
-   checked for WCAG text contrast against both surfaces rather than eyeballed:
+   A broker-app palette: a cool grey page, white cards, one blue for
+   anything you can press, and green / red reserved for gains and losses.
+   Every text colour below was measured (WCAG 2.x) against all three
+   surfaces it sits on, in both themes:
 
-     light  gain #006300  7.35:1   loss #d03b3b  4.68:1
-     dark   gain #0ca30c  5.19:1   loss #e66767  5.39:1
+     light  ink 16.5+  ink-2 5.75+  accent 5.15+  gain 4.93+  loss 4.72+
+     dark   ink 14.2+  ink-2 7.15+  accent 5.86+  gain 7.34+  loss 5.82+
+     button text on accent: light 5.67, dark 6.94
 
-   Muted #898781 is only 3.50:1 on the light surface, so it is NEVER used for
-   small body text — labels use secondary ink instead.
+   Gain/loss red-vs-green is near-identical to red-green colourblind
+   readers, so colour never carries the sign alone — every delta also
+   shows a +/- sign and an arrow glyph (see Delta in components/ui.tsx).
 
-   Gain/loss red-vs-green measures protan ΔE 4.6: indistinguishable to
-   red-green colourblind readers. Colour therefore never carries the sign
-   alone — every delta also shows a +/- sign and an arrow glyph.
+   The score meters use one blue ramp: the fill is the accent, the track a
+   lighter step of the same hue, so the state reads across the whole bar.
+
+   Theme: the OS setting applies unless <html data-theme> says otherwise.
+   The `:where(:not(...))` guard lets a "light" stamp beat OS-dark, and the
+   explicit [data-theme="dark"] block lets "dark" beat OS-light.
    ───────────────────────────────────────────────────────────── */
 :root {
-  --surface: #fcfcfb;
-  --plane: #f9f9f7;
-  --ink: #0b0b0b;
-  --ink-2: #52514e;
-  --hairline: rgba(11, 11, 11, 0.1);
-  --grid: #e1e0d9;
+  color-scheme: light;
 
-  --gain: #006300;
-  --loss: #d03b3b;
-  --gain-soft: rgba(12, 163, 12, 0.1);
-  --loss-soft: rgba(208, 59, 59, 0.1);
+  --plane: #f3f4f6;
+  --surface: #ffffff;
+  --surface-2: #f6f7f9;
+  --ink: #14161a;
+  --ink-2: #5a606b;
+  --hairline: rgba(20, 22, 26, 0.09);
+  --hairline-strong: rgba(20, 22, 26, 0.16);
 
-  /* sequential blue, monotonic light -> dark (verified) */
-  --meter-track: #cde2fb;
-  --meter-fill: #2a78d6;
-  --accent: #2a78d6;
+  --accent: #2563c9;
   --accent-ink: #ffffff;
+  --accent-soft: rgba(37, 99, 201, 0.1);
+
+  --gain: #0a7a3f;
+  --loss: #c8372f;
+  --gain-soft: rgba(10, 122, 63, 0.1);
+  --loss-soft: rgba(200, 55, 47, 0.09);
+
+  /* Status, never used for data: always paired with an icon and a label. */
+  --warn: #8a5a00;
+  --warn-soft: rgba(250, 178, 25, 0.16);
+
+  --meter-track: #dbe7fa;
+  --meter-fill: #2a78d6;
+
+  --shadow-card: 0 1px 2px rgba(20, 22, 26, 0.04), 0 1px 1px rgba(20, 22, 26, 0.02);
+  --shadow-pop: 0 12px 32px rgba(20, 22, 26, 0.14), 0 2px 6px rgba(20, 22, 26, 0.06);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
-    --surface: #1a1a19;
-    --plane: #0d0d0d;
-    --ink: #ffffff;
-    --ink-2: #c3c2b7;
-    --hairline: rgba(255, 255, 255, 0.1);
-    --grid: #2c2c2a;
+    color-scheme: dark;
 
-    --gain: #0ca30c;
-    --loss: #e66767;
+    --plane: #0b0c0e;
+    --surface: #15171b;
+    --surface-2: #1c1f24;
+    --ink: #eceef2;
+    --ink-2: #a5abb5;
+    --hairline: rgba(255, 255, 255, 0.08);
+    --hairline-strong: rgba(255, 255, 255, 0.14);
 
-    --meter-track: #184f95;
-    --meter-fill: #3987e5;
-    --accent: #3987e5;
-    --accent-ink: #0b0b0b;
+    --accent: #5b9bf5;
+    --accent-ink: #0b0c0e;
+    --accent-soft: rgba(91, 155, 245, 0.14);
+
+    --gain: #34c47a;
+    --loss: #f2726c;
+    --gain-soft: rgba(52, 196, 122, 0.12);
+    --loss-soft: rgba(242, 114, 108, 0.12);
+
+    --warn: #f5c04a;
+    --warn-soft: rgba(245, 192, 74, 0.12);
+
+    --meter-track: #1e3556;
+    --meter-fill: #5b9bf5;
+
+    --shadow-card: 0 0 0 transparent;
+    --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
   }
 }
 
 :root[data-theme="dark"] {
-  --surface: #1a1a19;
-  --plane: #0d0d0d;
-  --ink: #ffffff;
-  --ink-2: #c3c2b7;
-  --hairline: rgba(255, 255, 255, 0.1);
-  --grid: #2c2c2a;
+  color-scheme: dark;
 
-  --gain: #0ca30c;
-  --loss: #e66767;
+  --plane: #0b0c0e;
+  --surface: #15171b;
+  --surface-2: #1c1f24;
+  --ink: #eceef2;
+  --ink-2: #a5abb5;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-strong: rgba(255, 255, 255, 0.14);
 
-  --meter-track: #184f95;
-  --meter-fill: #3987e5;
-  --accent: #3987e5;
-  --accent-ink: #0b0b0b;
+  --accent: #5b9bf5;
+  --accent-ink: #0b0c0e;
+  --accent-soft: rgba(91, 155, 245, 0.14);
+
+  --gain: #34c47a;
+  --loss: #f2726c;
+  --gain-soft: rgba(52, 196, 122, 0.12);
+  --loss-soft: rgba(242, 114, 108, 0.12);
+
+  --warn: #f5c04a;
+  --warn-soft: rgba(245, 192, 74, 0.12);
+
+  --meter-track: #1e3556;
+  --meter-fill: #5b9bf5;
+
+  --shadow-card: 0 0 0 transparent;
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 @theme inline {
-  --color-surface: var(--surface);
   --color-plane: var(--plane);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-hairline: var(--hairline);
-  --color-gain: var(--gain);
-  --color-loss: var(--loss);
+  --color-hairline-strong: var(--hairline-strong);
   --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-gain: var(--gain);
+  --color-gain-soft: var(--gain-soft);
+  --color-loss: var(--loss);
+  --color-loss-soft: var(--loss-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-meter-track: var(--meter-track);
+  --color-meter-fill: var(--meter-fill);
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -96,6 +152,28 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   /* Nothing should ever scroll the page sideways on a phone. */
   overflow-x: hidden;
+  /* Taps get our own pressed states, not the grey iOS flash. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS zooms the page into any focused field under 16px. Keep form text at
+   16px on phones; it may drop to 14px once there is a pointer. */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+@media (min-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 14px;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Big standalone values use proportional figures; tabular is reserved for
@@ -106,6 +184,48 @@ body {
 }
 .tnum {
   font-variant-numeric: tabular-nums;
+}
+
+/* Disclosure rows: no browser triangle, our own chevron rotates instead. */
+summary {
+  list-style: none;
+  cursor: pointer;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+details[open] > summary .chevron {
+  transform: rotate(90deg);
+}
+.chevron {
+  transition: transform 160ms ease;
+}
+
+/* Icons that only make sense in one theme (the theme toggle's sun / moon).
+   Driven by the same scopes as the tokens, so there is nothing to hydrate. */
+.when-dark {
+  display: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .when-dark {
+    display: inline-flex;
+  }
+  :root:where(:not([data-theme="light"])) .when-light {
+    display: none;
+  }
+}
+:root[data-theme="dark"] .when-dark {
+  display: inline-flex;
+}
+:root[data-theme="dark"] .when-light {
+  display: none;
+}
+
+/* Set by applyTheme for one frame, so a theme switch flips everything at once. */
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -122,17 +242,21 @@ body {
 .skeleton {
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--ink) 7%, transparent) 25%,
-    color-mix(in srgb, var(--ink) 13%, transparent) 37%,
-    color-mix(in srgb, var(--ink) 7%, transparent) 63%
+    color-mix(in srgb, var(--ink) 6%, transparent) 25%,
+    color-mix(in srgb, var(--ink) 11%, transparent) 37%,
+    color-mix(in srgb, var(--ink) 6%, transparent) 63%
   );
   background-size: 400% 100%;
   animation: skeleton-sweep 1.4s ease-in-out infinite;
 }
 
 @keyframes skeleton-sweep {
-  0% { background-position: 100% 50%; }
-  100% { background-position: 0 50%; }
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
 }
 
 /* Row separators.

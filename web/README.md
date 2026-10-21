@@ -4,7 +4,7 @@ Hosted version of the local Python advisor. Tells you which watchlist ETF is
 cheapest right now and how many units fit your budget. **It places no orders** —
 you place the trade yourself in the Groww app.
 
-- **Data**: Yahoo Finance prices + AMFI NAVs, fetched by a scheduled GitHub Action into Supabase
+- **Data**: Yahoo Finance prices, AMFI end-of-day NAVs and NSE intraday iNAVs, fetched by a scheduled GitHub Action into Supabase
 - **Backend**: Supabase Postgres
 - **Auth**: Google sign-in, restricted to an email allowlist
 - **Host**: Vercel
@@ -51,60 +51,108 @@ rate-limited.
 ## The strategy
 
 ```
-1. FRESHNESS   refuse everything if prices missed a trading session;
-               exclude any symbol whose bar lags the newest one
-2. HISTORY     need `min_candles` sessions (default 252). Below the 252-session
-               scoring window, cheapness is discounted for confidence
-3. TREND       above the 50-day avg        -> keep
-               below 50-day, above 14-day   -> keep (dip turning up)
-               below BOTH                   -> discard, still falling
-4. PREMIUM     market price too far above NAV -> discard
-5. SCORE       final = cheapness x confidence + gap_weight x allocation_gap
-6. BUDGET      skip anything one unit of which busts the budget
-7. RECOMMEND   the highest-scoring candidate that fits
+0. INTEGRITY   refuse everything if a held ETF has no price, or if the targets
+               are more than 5pp away from summing to 100
+1. FRESHNESS   refuse everything if prices are more than `max_bar_age_sessions`
+               NSE sessions behind; exclude any symbol whose bar lags the newest one
+2. HISTORY     need `min_candles` daily closes (default 252)
+3. PREMIUM     price too far above iNAV / NAV, absolutely or for this ETF -> discard
+4. BUDGET      discard anything one unit of which busts the budget
+5. MARKS       cheapness and allocation gap, each marked 0-100 against the
+               ETFs still in the running
+6. SCORE       final = 0.5 x cheapness marks + 0.5 x allocation marks
+7. RECOMMEND   the highest score
 ```
 
-**Cheapness decides when to buy; the allocation gap decides what to buy.**
+**Half the score is how cheap an ETF is against its own last 14 sessions; half
+is how far it sits below its target.**
 
-There is no hard concentration cap. An ETF above its target earns a *negative*
-gap, which lowers its score, instead of being blocked outright.
+There is no trend filter: an ETF still sliding below its moving averages is
+marked like any other. There is no hard concentration cap either — an ETF above
+its target simply earns low allocation marks.
 
-### Cheapness (0–100)
+### Freshness
 
-Measured against each ETF's **own** history, never against the other ETFs, so a
-volatile ETF and a steady one are comparable. Scale-invariant — the rupee price
-level carries no information.
+Staleness is counted in NSE trading sessions, not calendar days, so a Monday
+morning run correctly expects Friday's bar and a long weekend is not a gap.
+Today only counts as a session once the 15:30 IST close has passed. The session
+calendar is only as good as the **NSE holidays** list on the Settings page: a
+missing holiday reads as a skipped session, which is what the default
+`max_bar_age_sessions = 1` of slack absorbs.
 
-- **A** — where the live price sits in its own trailing 1-year range of closes
-  (0 = at its 52-week low) → contributes `100 − percentile`
-- **B** — today's drawdown from its 50-day high, ranked against its own past
-  year of drawdowns → contributes that percentile
-- `cheapness = (A + B) / 2`
+### Cheapness
 
-Both drawdown windows are exactly `HIGH_LOOKBACK` observations wide: history
-uses `closes[i-look+1 .. i]`, and today uses `look − 1` prior closes plus the
-live price. Getting this wrong gives today a window one observation too wide,
-which makes today's dip look systematically deeper than the history it is
-ranked against.
+`below_avg = (avg14 − live) / avg14`, where `avg14` is the mean of the ETF's
+last 14 completed daily closes. Positive means it trades below its recent
+average. During market hours Yahoo's newest daily bar is today's own, so it is
+left out — the live price takes its place rather than being averaged against
+itself.
+
+This is a raw percentage, so ETFs that swing further (MON100, small caps) take
+the top cheapness marks more often than steady ones. The allocation half is the
+counterweight: every purchase raises the bought ETF's weight and lowers its
+allocation marks next time.
 
 ### Allocation gap
 
-`gap = target_pct − current_pct`, in percentage points, contributing
-`gap_weight × gap` to the score. Set targets per ETF on the Watchlist page; they
-should sum to 100 and the app tells you when they don't. `gap_weight = 0`
-ignores targets entirely; higher values make them dominate cheapness.
+`gap = target_pct − current_pct`, in percentage points, where `current_pct` is
+the ETF's share of everything you hold — including holdings off the watchlist.
+Set targets per ETF on the Watchlist page. They should sum to 100: more than
+1pp off and the dashboard warns, more than 5pp off and it refuses to recommend.
+An ETF with no target counts as exactly on target (gap 0).
 
-### Premium over NAV
+### Marks and the score
 
-NAV comes from AMFI's daily file, joined to NSE tickers by ISIN via Groww's
-instrument master. An ETF trading more than `max_premium_pct` above NAV is
-refused — you would be paying more than the underlying is worth.
+Each metric is marked 0–100 **against the other ETFs still in the running**:
+the best value gets 100, the worst gets 0, and the rest in proportion to where
+they fall between. If every ETF has the same value on a metric — or only one
+ETF is left — they all get a neutral 50 on it. Then
+
+`score = 0.5 × cheapness marks + 0.5 × allocation marks`
+
+and the highest score is recommended. Because marks are relative, the budget
+check runs first: an ETF you cannot afford would otherwise stretch the scale
+everything else is marked on.
+
+A worked example, all three at the same 14-day average of Rs.100:
+
+| ETF | Price vs avg | Cheapness | Weight / target | Gap | Allocation | Score |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A | 5% below | 100 | 38.9% / 40% | +1.1pp | 54 | **77.1** |
+| B | 2% below | 40 | 10.0% / 30% | +20.0pp | 100 | 70.0 |
+| C | at it | 0 | 51.1% / 30% | −21.1pp | 0 | 0.0 |
+
+A wins. Hold enough A to put it 18.8pp over target and its allocation marks
+drop to 0: it scores 50 on cheapness alone and B wins with 70.
+
+### Premium over fair value
+
+The reference is the **iNAV** — NSE's intraday indicative NAV, already adjusted
+for currency — when the fetcher caught one in session and it is no older than
+`max_inav_age_minutes`. Otherwise it falls back to AMFI's **end-of-day NAV**,
+joined to NSE tickers by ISIN via Groww's instrument master, if it is no older
+than `max_nav_age_days`. The EOD NAV is the weaker reference: for MON100 on a
+Monday morning it reflects Thursday's Nasdaq close plus days of rupee drift.
+
+Two gates, either of which discards the ETF:
+
+- **Absolute** — trading more than `max_premium_pct` (default 3%) above the
+  reference. You would be paying well over what the underlying is worth.
+- **Relative** — the premium is above `premium_floor_pct` (default 0.75%) *and*
+  above the `max_premium_pctile` (default 90th) percentile of this ETF's own
+  `premium_history`. Every ETF has its own baseline, so this is self-calibrating.
+  It stays quiet until there are 60 samples.
 
 This is not theoretical: MON100 measured **+16.12% over NAV** during
 development, because Indian funds hitting the SEBI overseas cap cannot create
-new units. International ETFs also publish NAV a day late, so a NAV up to
-`max_nav_age_days` old is still used; older than that and the check is skipped
-rather than trusted.
+new units.
+
+**Premium-sensitive ETFs fail closed.** For most ETFs a premium that cannot be
+checked — no fresh iNAV and no usable NAV — is waved through. Tick **Can trade
+far from NAV** on the Watchlist page for international or thinly traded ETFs
+(MON100 is seeded on) and they are refused instead. When one of them is judged
+only against the EOD NAV, the dashboard warns that the number carries a day of
+index and currency drift.
 
 ---
 
@@ -118,7 +166,11 @@ rather than trusted.
    `vansh.gupta@storemink.com`. Change that seed line first if you want a
    different first user.
 3. **Project Settings → API** — copy the *Project URL* and the *anon public*
-   key. You need both in step 4.
+   key. You need both in step 3.
+
+The file is a base schema followed by migrations, each safe to re-run. After
+pulling changes, paste the whole file again — that applies any new migration
+and leaves your data alone.
 
 > Do **not** use the `service_role` key anywhere in this app. It bypasses Row
 > Level Security, which is the only thing enforcing the email allowlist.
@@ -144,9 +196,17 @@ rather than trusted.
 
 ### 3. Run it locally
 
+Create `web/.env.local` with the two values from step 1:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT-REF.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-public-key
+```
+
+Then:
+
 ```bash
 cd web
-cp .env.example .env.local     # fill in the two values
 npm install
 npm run dev
 ```
@@ -181,8 +241,15 @@ automatically because the job reads the watchlist from Supabase.
 1. Import the Git repo in Vercel.
 2. **Set Root Directory to `web`** — the repo root is the Python project, so a
    default import will fail to find a Next.js app.
-3. Add both environment variables from `.env.example` (Production and Preview).
-   Do **not** add the service-role key here.
+3. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   (Production and Preview). Do **not** add the service-role key here.
+
+   Optional: add `GITHUB_TOKEN` and `GITHUB_REPO` (`owner/name`) and the
+   dashboard's Run button triggers the fetcher and waits for fresh prices,
+   instead of only re-scoring the stored ones. The token needs **Actions:
+   write** on the repo (fine-grained) or the `workflow` scope (classic).
+   `GITHUB_WORKFLOW_FILE` and `GITHUB_REF_NAME` default to `fetch-prices.yml`
+   and `main`.
 4. Deploy, then go back and set Supabase's *Site URL* / *Redirect URLs* to the
    real deployment URL.
 
@@ -202,14 +269,33 @@ yourself out entirely.
 
 | Page | What it does |
 | --- | --- |
-| **Advisor** | Runs the strategy: recommendation, cheapness ranking, discarded ETFs, portfolio table |
-| **Watchlist** | ETFs the advisor may recommend. Use exact NSE symbols |
-| **Portfolio** | What you own. Include ETFs *not* on the watchlist — they count toward your total |
-| **Settings** | Budget, concentration cap, limit buffer, and the email allowlist |
+| **Advisor** | Runs the strategy: recommendation with its score breakdown, ranking, excluded ETFs and why, warnings, portfolio summary |
+| **Watchlist** | ETFs the advisor may recommend, each one's target allocation, and whether it can trade far from NAV. Use exact NSE symbols |
+| **Portfolio** | What you own, with average buy prices for P&L. Include ETFs *not* on the watchlist — they count toward your total |
+| **Settings** | Light / dark / follow-the-phone theme, budget, premium limits, history and freshness limits, NSE holidays, limit buffer, and the email allowlist. The 50/50 score split is fixed in code |
 
-Prices are whatever the last Action run wrote. The dashboard shows their age,
-and warns prominently once they're more than 90 minutes old — that usually
-means the scheduled job failed, so check the Actions tab.
+Prices are whatever the last Action run wrote. The dashboard shows the newest
+session on file and when the fetcher last ran, and refuses to recommend
+anything once the data is more than `max_bar_age_sessions` NSE sessions behind
+— that usually means the scheduled job failed, so check the Actions tab.
+
+**On a phone**, open the site and use *Add to Home Screen* (Safari's share
+sheet, or Chrome's menu). It installs with its own icon and opens full-screen
+with the bottom tab bar, like a native app. **Copy order** on the pick card
+puts `SYMBOL BUY qty @ price LIMIT` on the clipboard for pasting into Groww.
+
+### Design preview
+
+`npm run dev`, then open <http://localhost:3000/preview>. Every screen renders
+from sample data (`src/app/preview/fixtures.ts`) scored by the real strategy —
+no database, no sign-in. The strip under the header switches between the
+normal, warning, no-buy, stale and empty states. It exists only under
+`next dev`: the proxy lets `/preview` through unauthenticated in development
+only, and a production build serves a 404 there.
+
+The screens themselves live in `src/components/views/`; each page in
+`src/app/(app)/` only fetches data and hands it to its view, which is what
+lets the preview render them without Supabase.
 
 ---
 
@@ -224,9 +310,17 @@ an order.
 minutes under load, and GitHub disables schedules on repos with no activity for
 60 days. If prices go stale, that's the first thing to check.
 
-**No iNAV / premium check.** International ETFs such as MON100 can trade well
-above the value of their holdings when Indian funds hit their overseas limit.
-Yahoo doesn't publish iNAV, so nothing here checks it.
+**iNAV is only there in market hours, and not always then.** The fetcher keeps
+NSE's iNAV only when the board is stamped for the current session; outside
+hours the premium check falls back to AMFI's end-of-day NAV. NSE also rejects
+some datacentre IPs, so a GitHub runner may get no iNAV at all on a given run.
+
+**The premium percentile compares slightly unlike things.** No historical iNAV
+is published anywhere, so `premium_history` is built from end-of-day NAVs while
+today's premium is measured against the iNAV when there is one. For an ETF
+whose underlying trades overnight (MON100) the two sit at systematically
+different levels. For those ETFs it is the absolute `max_premium_pct` cap, not
+the percentile, that does the real work.
 
 **Not financial advice.** This tool computes and reports numbers. Every decision
 is yours.
@@ -239,25 +333,32 @@ is yours.
 cd web && node --experimental-strip-types scripts/test-strategy.ts
 ```
 
-36 assertions covering the drawdown window consistency, history confidence,
-premium-over-NAV handling, allocation-gap ranking, staleness refusal, and the
-budget walk.
+Covers the 14-day cheapness window, 0–100 mark scaling and its ties, the 50/50
+score and the ranking it produces, the absence of a trend filter, iNAV vs EOD
+NAV selection and staleness, the premium percentile gate and noise floor,
+premium-sensitive ETFs failing closed, the NSE session calendar, stale-data
+refusal, the integrity gates (unpriced holdings, target sums), and the budget
+check — including that an unaffordable ETF never stretches the marking scale.
+Exits non-zero on any failure.
 
-One fixture note worth knowing if you add tests: a **flat or sine price series
-fails the trend check**, because its moving averages sit at the same level as
-the price, so it is correctly discarded as "still falling". Use the `rising()` /
-`pulledBack()` helpers, which pass the trend check by construction.
+Fixture note if you add tests: `flat(level)` makes the 14-day average exactly
+`level`, so a live price of 95 on `flat(100)` is precisely 5% below it.
 
 ## The local Python script has diverged
 
-`main.py` in the repo root is the original standalone advisor. It shares the
-cheapness formula and the trend rule, and it has the same drawdown-window fix
-and 252-session minimum. But it does **not** have:
+`main.py` in the repo root is the original standalone advisor, and it still runs
+the **old** strategy. Where the web app now scores 50/50 on cheapness against the
+14-day average and allocation gap, `main.py`:
 
-- target allocations or allocation-gap scoring (no database to read them from)
-- the premium-over-NAV check
-- the stale-session refusal
+- scores cheapness against each ETF's own past year — where the price sits in
+  its 1-year range, and how unusual today's dip from its 50-day high is
+- drops any ETF trading below both its 50-day and 14-day averages
+- has no target allocations (no database to read them from) and uses a hard
+  `MAX_WEIGHT_PCT` concentration cap instead
+- has no premium-over-NAV check
+- has no stale-session refusal
 
-That last two matter. Running `main.py` today recommends MON100 — the ETF the
-web app refuses because it is 16% above NAV. **Treat the web app as
+So the two will often recommend different ETFs. The last two gaps matter most:
+when this was written, `main.py` recommended MON100 —
+the ETF the web app refuses because it was 16% above NAV. **Treat the web app as
 authoritative**, and either retire `main.py` or remember what it doesn't check.

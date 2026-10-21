@@ -12,6 +12,12 @@ import { NextResponse, type NextRequest } from "next/server";
 const PUBLIC_PATHS = ["/login", "/auth", "/not-allowed"];
 
 export async function proxy(request: NextRequest) {
+  // The sample-data design preview (src/app/preview) talks to no database and
+  // exists only under `next dev`; in a production build the route 404s.
+  if (process.env.NODE_ENV === "development" && request.nextUrl.pathname.startsWith("/preview")) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -52,6 +58,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Skip static assets and images — they don't need a session check.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // Skip static assets, images and the home-screen icon + manifest — they need
+  // no session, and iOS fetches the icon without the session cookie.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icon|apple-icon|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

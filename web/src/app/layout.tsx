@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { cookies } from "next/headers";
 import "./globals.css";
-import { Nav } from "@/components/Nav";
-import { getSessionEmail } from "@/lib/supabase/server";
+import { THEME_COLOR, THEME_COOKIE, parseTheme } from "@/lib/theme";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -16,28 +16,30 @@ export const metadata: Metadata = {
 };
 
 // Lets the layout fill the screen behind the notch and home indicator, which
-// the nav then pads for via env(safe-area-inset-*).
+// the nav then pads for via env(safe-area-inset-*). The browser's own chrome
+// takes the header's colour in each theme; a manual override repaints these
+// tags — see applyTheme in lib/theme.ts.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: THEME_COLOR.light },
+    { media: "(prefers-color-scheme: dark)", color: THEME_COLOR.dark },
+  ],
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const email = await getSessionEmail();
+  // Stamped on the server so an overridden theme is right on the first paint.
+  const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
 
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-      <body className="flex min-h-dvh flex-col">
-        {email && <Nav email={email} />}
-        {/* Bottom padding clears the fixed mobile tab bar (56px + safe area). */}
-        <div
-          className="flex-1 pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:pb-0"
-          style={email ? undefined : { paddingBottom: 0 }}
-        >
-          {children}
-        </div>
-      </body>
+    <html
+      lang="en"
+      data-theme={theme === "system" ? undefined : theme}
+      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+    >
+      <body className="flex min-h-dvh flex-col">{children}</body>
     </html>
   );
 }

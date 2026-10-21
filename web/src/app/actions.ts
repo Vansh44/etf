@@ -88,6 +88,9 @@ function friendly(error: { message: string; code?: string }): string {
   if (error.message.includes("violates row-level security")) {
     return "Your account is not allowed to make changes.";
   }
+  if (error.message.includes("premium_sensitive")) {
+    return "The database predates the premium-sensitive flag — run web/supabase/schema.sql in the Supabase SQL editor, then save again.";
+  }
   return error.message;
 }
 
@@ -106,10 +109,16 @@ function parseTarget(raw: FormDataEntryValue | null): number | null | "invalid" 
   return value;
 }
 
+/** A checkbox posts "on" when ticked and nothing at all when not. */
+function parseFlag(raw: FormDataEntryValue | null): boolean {
+  return raw === "on";
+}
+
 export async function addWatchlistItem(formData: FormData): Promise<ActionResult> {
   const symbol = normaliseSymbol(formData.get("symbol"));
   const name = String(formData.get("name") ?? "").trim();
   const target = parseTarget(formData.get("target_pct"));
+  const premiumSensitive = parseFlag(formData.get("premium_sensitive"));
 
   if (!symbol) return { ok: false, error: "Symbol is required." };
   if (!name) return { ok: false, error: "Name is required." };
@@ -120,7 +129,7 @@ export async function addWatchlistItem(formData: FormData): Promise<ActionResult
   const supabase = await createClient();
   const { error } = await supabase
     .from("watchlist")
-    .insert({ symbol, name, target_pct: target });
+    .insert({ symbol, name, target_pct: target, premium_sensitive: premiumSensitive });
   if (error) return { ok: false, error: friendly(error) };
 
   revalidatePath("/watchlist");
@@ -132,6 +141,7 @@ export async function updateWatchlistItem(formData: FormData): Promise<ActionRes
   const symbol = normaliseSymbol(formData.get("symbol"));
   const name = String(formData.get("name") ?? "").trim();
   const target = parseTarget(formData.get("target_pct"));
+  const premiumSensitive = parseFlag(formData.get("premium_sensitive"));
 
   if (!name) return { ok: false, error: "Name cannot be empty." };
   if (target === "invalid") {
@@ -141,7 +151,7 @@ export async function updateWatchlistItem(formData: FormData): Promise<ActionRes
   const supabase = await createClient();
   const { error } = await supabase
     .from("watchlist")
-    .update({ name, target_pct: target })
+    .update({ name, target_pct: target, premium_sensitive: premiumSensitive })
     .eq("symbol", symbol);
   if (error) return { ok: false, error: friendly(error) };
 
@@ -219,8 +229,6 @@ export async function updateSettings(formData: FormData): Promise<ActionResult> 
 
   const budget = num("budget");
   const limitBufferPct = num("limit_buffer_pct");
-  const gapWeight = num("gap_weight");
-  const gapKneePct = num("gap_knee_pct");
   const maxPremiumPct = num("max_premium_pct");
   const premiumFloorPct = num("premium_floor_pct");
   const maxPremiumPctile = num("max_premium_pctile");
@@ -243,14 +251,6 @@ export async function updateSettings(formData: FormData): Promise<ActionResult> 
     [
       !Number.isFinite(limitBufferPct) || limitBufferPct < 0 || limitBufferPct > 5,
       "Limit buffer must be between 0 and 5 percent.",
-    ],
-    [
-      !Number.isFinite(gapWeight) || gapWeight < 0 || gapWeight > 20,
-      "Gap weight must be between 0 and 20.",
-    ],
-    [
-      !Number.isFinite(gapKneePct) || gapKneePct < 1 || gapKneePct > 50,
-      "Gap knee must be between 1 and 50 percentage points.",
     ],
     [
       !Number.isFinite(maxPremiumPct) || maxPremiumPct < 0 || maxPremiumPct > 50,
@@ -294,8 +294,6 @@ export async function updateSettings(formData: FormData): Promise<ActionResult> 
     .update({
       budget,
       limit_buffer_pct: limitBufferPct,
-      gap_weight: gapWeight,
-      gap_knee_pct: gapKneePct,
       max_premium_pct: maxPremiumPct,
       premium_floor_pct: premiumFloorPct,
       max_premium_pctile: maxPremiumPctile,

@@ -1,25 +1,51 @@
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_SETTINGS, type Settings } from "@/lib/strategy";
 
-export type WatchlistItem = { symbol: string; name: string; targetPct: number | null };
+export type WatchlistItem = {
+  symbol: string;
+  name: string;
+  targetPct: number | null;
+  /** Fail closed on an uncheckable premium — see WatchlistItem in strategy.ts. */
+  premiumSensitive: boolean;
+};
 export type Holding = { symbol: string; units: number; avgPrice: number | null };
 export type AllowedEmail = { email: string; added_by: string | null; added_at: string };
 
 // The defaults live with the strategy that consumes them — one source of truth.
 export { DEFAULT_SETTINGS };
 
+type WatchlistRow = {
+  symbol: string;
+  name: string;
+  target_pct: number | string | null;
+  // Added by the premium-sensitive migration. Absent, not null, on a database
+  // that predates it — hence the legacy select below.
+  premium_sensitive?: boolean;
+};
+
 export async function getWatchlist(): Promise<WatchlistItem[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const current = await supabase
     .from("watchlist")
-    .select("symbol, name, target_pct")
+    .select("symbol, name, target_pct, premium_sensitive")
     .order("symbol");
 
-  return (data ?? []).map((row) => ({
-    symbol: row.symbol as string,
-    name: row.name as string,
+  // Selecting a missing column fails the whole request, and an empty watchlist
+  // would read as "add some ETFs first". Fall back to the pre-migration columns
+  // so the advisor keeps working, with no ETF failing closed, until schema.sql
+  // is applied.
+  const legacy = current.error
+    ? await supabase.from("watchlist").select("symbol, name, target_pct").order("symbol")
+    : null;
+
+  const rows = ((current.error ? legacy?.data : current.data) ?? []) as WatchlistRow[];
+
+  return rows.map((row) => ({
+    symbol: row.symbol,
+    name: row.name,
     // numeric arrives as a string from PostgREST; null means "no target set".
     targetPct: row.target_pct === null ? null : Number(row.target_pct),
+    premiumSensitive: row.premium_sensitive === true,
   }));
 }
 
@@ -44,7 +70,7 @@ export async function getSettings(): Promise<Settings> {
     // One literal, not a concatenation: supabase-js infers the row type from
     // the string, and only a literal carries the column names into the type.
     .select(
-      "budget, limit_buffer_pct, gap_weight, gap_knee_pct, max_premium_pct, premium_floor_pct, max_premium_pctile, min_candles, max_bar_age_sessions, max_nav_age_days, max_inav_age_minutes, nse_holidays",
+      "budget, limit_buffer_pct, max_premium_pct, premium_floor_pct, max_premium_pctile, min_candles, max_bar_age_sessions, max_nav_age_days, max_inav_age_minutes, nse_holidays",
     )
     .eq("id", 1)
     .maybeSingle();
@@ -63,8 +89,6 @@ export async function getSettings(): Promise<Settings> {
   return {
     budget: num(data.budget, DEFAULT_SETTINGS.budget),
     limitBufferPct: num(data.limit_buffer_pct, DEFAULT_SETTINGS.limitBufferPct),
-    gapWeight: num(data.gap_weight, DEFAULT_SETTINGS.gapWeight),
-    gapKneePct: num(data.gap_knee_pct, DEFAULT_SETTINGS.gapKneePct),
     maxPremiumPct: num(data.max_premium_pct, DEFAULT_SETTINGS.maxPremiumPct),
     premiumFloorPct: num(data.premium_floor_pct, DEFAULT_SETTINGS.premiumFloorPct),
     maxPremiumPctile: num(data.max_premium_pctile, DEFAULT_SETTINGS.maxPremiumPctile),

@@ -1,3 +1,7 @@
+import { Page } from "@/components/AppShell";
+import { AlertIcon } from "@/components/icons";
+import { Card, buttonClass } from "@/components/ui";
+
 /**
  * Shown when a signed-in user isn't on the allowlist.
  *
@@ -6,22 +10,24 @@
  */
 export function NotAllowedNotice() {
   return (
-    <div className="mx-auto max-w-md p-6">
-      <div className="rounded-xl border border-amber-300 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-950/40">
-        <h1 className="font-semibold">Your account is not on the allowlist</h1>
-        <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
-          You are signed in, but this email has not been granted access. Ask an existing user to
-          add it under Settings.
-        </p>
-        <form action="/auth/signout" method="post" className="mt-4">
-          <button
-            type="submit"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white dark:bg-slate-100 dark:text-slate-900"
-          >
-            Sign out
-          </button>
-        </form>
-      </div>
-    </div>
+    <Page width="narrow">
+      <Card>
+        <div className="p-6 sm:p-8">
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-warn-soft text-warn">
+            <AlertIcon />
+          </span>
+          <h1 className="mt-4 text-lg font-semibold">Your account isn&apos;t on the allowlist</h1>
+          <p className="mt-1.5 text-sm leading-relaxed text-ink-2">
+            You&apos;re signed in, but this email hasn&apos;t been granted access. Ask an existing user to add it
+            under Settings.
+          </p>
+          <form action="/auth/signout" method="post" className="mt-6">
+            <button type="submit" className={buttonClass("secondary")}>
+              Sign out
+            </button>
+          </form>
+        </div>
+      </Card>
+    </Page>
   );
 }
