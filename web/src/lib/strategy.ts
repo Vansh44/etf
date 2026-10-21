@@ -794,11 +794,11 @@ export function runStrategy(input: StrategyInput): StrategyResult {
     .map((r) => r.symbol);
 
   // ── targets must sum to ~100 or every gap is biased ──
+  // Only once any are set: with none, every gap is zero and nothing is skewed.
+  const anyTargets = watchlist.some((w) => w.targetPct !== null);
   const targetDrift = Math.abs(targetSum - 100);
-  const targetsUnusable =
-    watchlist.some((w) => w.targetPct !== null) &&
-    targetDrift > TARGET_SUM_BLOCK_TOLERANCE;
-  if (targetDrift > TARGET_SUM_WARN_TOLERANCE && !targetsUnusable) {
+  const targetsUnusable = anyTargets && targetDrift > TARGET_SUM_BLOCK_TOLERANCE;
+  if (anyTargets && targetDrift > TARGET_SUM_WARN_TOLERANCE && !targetsUnusable) {
     warnings.push(
       `Targets sum to ${targetSum.toFixed(1)}%, not 100% — every allocation gap is skewed by ${(100 - targetSum).toFixed(1)}pp.`,
     );

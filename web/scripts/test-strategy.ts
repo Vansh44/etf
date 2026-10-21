@@ -6,11 +6,16 @@
 import {
   HIGH_LOOKBACK,
   PRICE_WINDOW,
-  premiumOverNav,
+  lastCompletedSession,
+  premiumOverFairValue,
+  premiumVerdict,
   runStrategy,
   scoreCheapness,
+  sessionsBetween,
+  shapeGap,
   type PriceData,
   type Settings,
+  type WatchlistItem,
 } from "../src/lib/strategy.ts";
 
 let pass = 0;
@@ -33,18 +38,27 @@ function ok(name: string, cond: boolean, detail = "") {
   cond ? (pass++, console.log(`  ✅ ${name}`)) : (fail++, console.log(`  ❌ ${name} ${detail}`));
 }
 
+// Spelled out rather than spread from DEFAULT_SETTINGS, so retuning a default
+// never silently changes what these tests assert.
 const SETTINGS: Settings = {
   budget: 2500,
   limitBufferPct: 0.2,
   gapWeight: 1,
-  maxPremiumPct: 1.5,
+  gapKneePct: 5,
+  maxPremiumPct: 3,
+  premiumFloorPct: 0.75,
+  maxPremiumPctile: 90,
   minCandles: 252,
-  maxBarAgeDays: 4,
-  maxNavAgeDays: 3,
+  maxBarAgeSessions: 1,
+  maxNavAgeDays: 4,
+  maxInavAgeMinutes: 120,
+  nseHolidays: [],
 };
 
-const NOW = Date.parse("2026-08-05T12:00:00+05:30");
-const TODAY = "2026-08-05";
+/** An IST wall-clock time, e.g. ist("2026-08-10T10:00:00"). */
+const ist = (local: string) => Date.parse(`${local}+05:30`);
+
+const NOW = ist("2026-08-05T12:00:00"); // a Wednesday, mid-session
 const YESTERDAY = "2026-08-04";
 
 /**
@@ -81,9 +95,17 @@ function priceRow(over: Partial<PriceData> & { symbol: string }): PriceData {
     lastBar: YESTERDAY,
     nav: null,
     navDate: null,
+    inav: null,
+    inavAt: null,
+    premiumHistory: [],
     fetchedAt: new Date(NOW - 10 * 60_000).toISOString(),
     ...over,
   };
+}
+
+/** One fresh, trend-passing price row per watchlist entry. */
+function pricesFor(watchlist: WatchlistItem[]): Map<string, PriceData> {
+  return new Map(watchlist.map((w) => [w.symbol, priceRow({ symbol: w.symbol })]));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -152,34 +174,153 @@ console.log("\n── HISTORY CONFIDENCE ──");
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-console.log("\n── PREMIUM OVER NAV ──");
+console.log("\n── PREMIUM OVER FAIR VALUE ──");
 {
-  const rich = premiumOverNav(
+  const rich = premiumOverFairValue(
     priceRow({ symbol: "MON100", livePrice: 321.82, nav: 277.146, navDate: YESTERDAY }),
-    3,
+    SETTINGS,
     NOW,
   );
   ok("MON100-style premium is ~16%", Math.abs((rich.premiumPct ?? 0) - 16.12) < 0.02,
      `got ${rich.premiumPct}`);
+  check("with no iNAV it is measured against the EOD NAV", rich.premiumSource, "nav");
 
-  const noNav = premiumOverNav(priceRow({ symbol: "X", nav: null }), 3, NOW);
-  check("missing NAV reports unavailable", noNav.unavailable, "no NAV published for this ETF");
-  ok("missing NAV does not fabricate a premium", noNav.premiumPct === null);
+  const noRef = premiumOverFairValue(priceRow({ symbol: "X" }), SETTINGS, NOW);
+  check("missing iNAV and NAV reports unavailable", noRef.premiumUnavailable,
+        "no iNAV or NAV published for this ETF");
+  ok("missing iNAV and NAV does not fabricate a premium", noRef.premiumPct === null);
 
-  const oldNav = premiumOverNav(
+  const oldNav = premiumOverFairValue(
     priceRow({ symbol: "X", nav: 100, navDate: "2026-07-01" }),
-    3,
+    SETTINGS,
     NOW,
   );
   ok("stale NAV is refused rather than trusted", oldNav.premiumPct === null,
      `got ${oldNav.premiumPct}`);
+  ok("and says how stale", (oldNav.premiumUnavailable ?? "").includes("days old"),
+     oldNav.premiumUnavailable ?? "");
 
-  const dayOld = premiumOverNav(
+  const dayOld = premiumOverFairValue(
     priceRow({ symbol: "MON100", livePrice: 110, nav: 100, navDate: YESTERDAY }),
-    3,
+    SETTINGS,
     NOW,
   );
   ok("a one-day-old NAV is still used (international ETFs lag)", dayOld.premiumPct !== null);
+
+  const both = premiumOverFairValue(
+    priceRow({
+      symbol: "X",
+      livePrice: 101,
+      inav: 100,
+      inavAt: new Date(NOW - 10 * 60_000).toISOString(),
+      nav: 90,
+      navDate: YESTERDAY,
+    }),
+    SETTINGS,
+    NOW,
+  );
+  check("a fresh iNAV is preferred over the EOD NAV", both.premiumSource, "inav");
+  check("and the premium is measured against it", both.premiumPct, 1);
+
+  const staleInav = premiumOverFairValue(
+    priceRow({
+      symbol: "X",
+      livePrice: 101,
+      inav: 100,
+      inavAt: new Date(NOW - 180 * 60_000).toISOString(), // past the 120-minute limit
+      nav: 90,
+      navDate: YESTERDAY,
+    }),
+    SETTINGS,
+    NOW,
+  );
+  check("an iNAV past max_inav_age_minutes falls back to the EOD NAV",
+        staleInav.premiumSource, "nav");
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log("\n── PREMIUM PERCENTILE GATE ──");
+{
+  // 100 trailing observations spread evenly over 0.00% .. 0.99%.
+  const history = Array.from({ length: 100 }, (_, i) => i / 100);
+  const fresh = new Date(NOW - 5 * 60_000).toISOString();
+  const at = (premiumPct: number, samples = history) =>
+    premiumOverFairValue(
+      priceRow({
+        symbol: "X",
+        livePrice: 100 * (1 + premiumPct / 100),
+        inav: 100,
+        inavAt: fresh,
+        premiumHistory: samples,
+      }),
+      SETTINGS,
+      NOW,
+    );
+
+  const unusual = at(1.2); // above every sample, above the floor, under the cap
+  check("today's premium is ranked against its own history", unusual.premiumPctile, 100);
+  ok("an unusually high premium for this ETF is gated",
+     (premiumVerdict(unusual, SETTINGS, false) ?? "").includes("percentile"),
+     premiumVerdict(unusual, SETTINGS, false) ?? "null");
+
+  check("a premium typical for this ETF passes", premiumVerdict(at(0.8), SETTINGS, false), null);
+
+  const tight = Array.from({ length: 100 }, () => 0); // a NIFTYBEES-style tracker
+  check("a premium under the noise floor is never gated, however unusual",
+        premiumVerdict(at(0.5, tight), SETTINGS, false), null);
+
+  const thin = at(1.2, history.slice(0, 30));
+  check("under 60 samples the percentile stays quiet", thin.premiumPctile, null);
+  check("and the gate does not fire", premiumVerdict(thin, SETTINGS, false), null);
+
+  ok("past max_premium_pct the absolute cap fires regardless",
+     (premiumVerdict(at(3.5, history.slice(0, 30)), SETTINGS, false) ?? "").includes("absolute limit"));
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log("\n── PREMIUM-SENSITIVE ETFs FAIL CLOSED ──");
+{
+  const closes = rising();
+  const live = aboveAverages(closes);
+  const run = (premiumSensitive: boolean, over: Partial<PriceData> = {}) =>
+    runStrategy({
+      watchlist: [{ symbol: "INTL", name: "international", targetPct: 100, premiumSensitive }],
+      holdings: [],
+      settings: SETTINGS,
+      prices: new Map([["INTL", priceRow({ symbol: "INTL", closes, livePrice: live, ...over })]]),
+      priceFailures: [],
+      nowMs: NOW,
+    });
+
+  const blind = run(true);
+  ok("no iNAV or NAV + premium-sensitive -> excluded",
+     blind.excluded.some((e) => e.symbol === "INTL" && e.reason.includes("cannot be checked")),
+     JSON.stringify(blind.excluded));
+  ok("and nothing is recommended", blind.recommendation === null);
+
+  check("the same ETF without the flag is still recommended",
+        run(false).recommendation?.symbol, "INTL");
+
+  const eodOnly = run(true, { nav: live, navDate: YESTERDAY });
+  check("with an EOD NAV it is judged, not refused", eodOnly.recommendation?.symbol, "INTL");
+  ok("but warns that the EOD NAV carries a day of drift",
+     eodOnly.warnings.some((w) => w.startsWith("INTL:")),
+     JSON.stringify(eodOnly.warnings));
+
+  const withInav = run(true, { inav: live, inavAt: new Date(NOW - 5 * 60_000).toISOString() });
+  check("with a fresh iNAV there is nothing to warn about", withInav.warnings, []);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log("\n── ALLOCATION GAP SHAPING ──");
+{
+  check("inside the knee the gap term is linear", shapeGap(4, 1.5, 5), 6);
+  check("and symmetric", shapeGap(-4, 1.5, 5), -6);
+  check("continuous at the knee", shapeGap(5, 1.5, 5), 7.5);
+  // The docstring's worked example: 15pp overweight at weight 1.5, knee 5.
+  check("quadratic past it: 15pp over costs 52.5, not a linear 22.5", shapeGap(-15, 1.5, 5), -52.5);
+  ok("slope is continuous across the knee",
+     Math.abs((shapeGap(5.001, 1, 5) - shapeGap(5, 1, 5)) / 0.001 - 1) < 1e-3);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -196,7 +337,7 @@ console.log("\n── ALLOCATION GAP DECIDES WHAT TO BUY ──");
   const result = runStrategy({
     watchlist: [
       { symbol: "UNDER", name: "under", targetPct: 60 },
-      { symbol: "OVER", name: "over", targetPct: 10 },
+      { symbol: "OVER", name: "over", targetPct: 40 },
     ],
     holdings: [
       { symbol: "UNDER", units: 1 },
@@ -216,17 +357,21 @@ console.log("\n── ALLOCATION GAP DECIDES WHAT TO BUY ──");
   check("recommendation is the underweight one", result.recommendation?.symbol, "UNDER");
   ok("no hard cap blocks the overweight ETF, it is merely ranked lower",
      result.ranked.some((r) => r.symbol === "OVER"));
-  ok("final score = cheapness x confidence + gapWeight x gap",
+  ok("final score = cheapness x confidence + shaped gap",
      Math.abs(under.finalScore - (under.cheapnessAdjusted + under.gapContribution)) < 1e-9);
+  check("the gap term is the shaped one",
+        under.gapContribution, shapeGap(under.gapPct, SETTINGS.gapWeight, SETTINGS.gapKneePct));
 }
 
 // gapWeight scales the influence
 {
   const cheapCloses = pulledBack();      // dipped hard -> high cheapness
-  const dearCloses = rising();           // at its high -> low cheapness
+  const dearCloses = rising();
+  // Live AT its high, not merely above its averages: dips carry 75% of
+  // cheapness, so even a 2% dip against a dip-free history reads as cheap.
   const prices = new Map<string, PriceData>([
     ["CHEAP", priceRow({ symbol: "CHEAP", closes: cheapCloses, livePrice: aboveAverages(cheapCloses) })],
-    ["NEEDED", priceRow({ symbol: "NEEDED", closes: dearCloses, livePrice: aboveAverages(dearCloses) })],
+    ["NEEDED", priceRow({ symbol: "NEEDED", closes: dearCloses, livePrice: dearCloses[dearCloses.length - 1] })],
   ]);
   const base = {
     watchlist: [
@@ -242,6 +387,21 @@ console.log("\n── ALLOCATION GAP DECIDES WHAT TO BUY ──");
   const bigGap = runStrategy({ ...base, settings: { ...SETTINGS, gapWeight: 5 } });
   check("gapWeight 0 -> cheapness alone wins", noGap.ranked[0].symbol, "CHEAP");
   check("gapWeight 5 -> the underweight one wins", bigGap.ranked[0].symbol, "NEEDED");
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log("\n── NSE SESSION CALENDAR ──");
+{
+  const none = new Set<string>();
+  check("Monday morning expects Friday's bar",
+        lastCompletedSession(ist("2026-08-10T10:00:00"), none), "2026-08-07");
+  check("after the 15:30 close, today counts",
+        lastCompletedSession(ist("2026-08-10T15:45:00"), none), "2026-08-10");
+  check("a listed holiday is skipped",
+        lastCompletedSession(ist("2026-08-11T10:00:00"), new Set(["2026-08-10"])), "2026-08-07");
+  check("Friday to Monday is one session, not three days",
+        sessionsBetween("2026-08-07", "2026-08-10", none), 1);
+  check("same day -> 0 sessions", sessionsBetween("2026-08-10", "2026-08-10", none), 0);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -284,8 +444,21 @@ console.log("\n── STALE DATA IS REFUSED ──");
   ok("missed session flagged", blocked.freshness.missedSession);
   ok("no recommendation when the data missed a session", blocked.recommendation === null);
   ok("reason explains the refusal",
-     (blocked.blockedReason ?? "").includes("latest trading session"),
+     (blocked.blockedReason ?? "").includes("last completed NSE session"),
      blocked.blockedReason ?? "");
+
+  // The case calendar-day counting got wrong: a weekend is not a gap.
+  const monday = runStrategy({
+    watchlist: [{ symbol: "A", name: "a", targetPct: 100 }],
+    holdings: [],
+    settings: { ...SETTINGS, maxBarAgeSessions: 0 },
+    prices: new Map([["A", priceRow({ symbol: "A", closes, lastBar: "2026-08-07" })]]),
+    priceFailures: [],
+    nowMs: ist("2026-08-10T10:00:00"),
+  });
+  ok("Friday's bar on a Monday morning is fresh, even with zero slack",
+     !monday.freshness.missedSession && monday.recommendation !== null,
+     JSON.stringify(monday.freshness));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -338,9 +511,53 @@ console.log("\n── PREMIUM BLOCKS A BUY END-TO-END ──");
     nowMs: NOW,
   });
   ok("ETF far above NAV is excluded",
-     r.excluded.some((e) => e.symbol === "RICH" && e.reason.includes("above NAV")),
+     r.excluded.some((e) => e.symbol === "RICH" && e.reason.includes("absolute limit")),
      JSON.stringify(r.excluded));
   check("the fairly-priced one is recommended", r.recommendation?.symbol, "FAIR");
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log("\n── INTEGRITY GATES ──");
+{
+  // A held symbol with no price would be valued at zero and skew every weight.
+  const unpriced = runStrategy({
+    watchlist: [{ symbol: "A", name: "a", targetPct: 100 }],
+    holdings: [{ symbol: "A", units: 1 }, { symbol: "GOLD", units: 10 }],
+    settings: SETTINGS,
+    prices: new Map([["A", priceRow({ symbol: "A" })]]),
+    priceFailures: [],
+    nowMs: NOW,
+  });
+  check("an unpriced holding is reported", unpriced.unpricedHoldings, ["GOLD"]);
+  ok("and blocks the recommendation",
+     unpriced.recommendation === null && (unpriced.blockedReason ?? "").includes("GOLD"),
+     unpriced.blockedReason ?? "");
+
+  const withTargets = (targets: Array<number | null>) => {
+    const watchlist = targets.map((targetPct, i) => ({ symbol: `E${i}`, name: `e${i}`, targetPct }));
+    return runStrategy({
+      watchlist,
+      holdings: [],
+      settings: SETTINGS,
+      prices: pricesFor(watchlist),
+      priceFailures: [],
+      nowMs: NOW,
+    });
+  };
+
+  const slightlyOff = withTargets([50, 47]);
+  ok("targets 3pp off warn", slightlyOff.warnings.some((w) => w.startsWith("Targets sum")),
+     JSON.stringify(slightlyOff.warnings));
+  ok("but still recommend", slightlyOff.recommendation !== null);
+
+  const wayOff = withTargets([50, 40]);
+  ok("targets 10pp off block the run",
+     wayOff.recommendation === null && (wayOff.blockedReason ?? "").includes("targets sum"),
+     wayOff.blockedReason ?? "");
+
+  const noTargets = withTargets([null, null]);
+  check("no targets at all is not a target-sum problem", noTargets.warnings, []);
+  ok("and still recommends on cheapness alone", noTargets.recommendation !== null);
 }
 
 // ════════════════════════════════════════════════════════════════════════════

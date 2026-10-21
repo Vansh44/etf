@@ -15,6 +15,8 @@ export const dynamic = "force-dynamic";
 const input =
   "min-h-11 rounded-xl border px-3 text-sm bg-[var(--surface)] focus:outline-2 focus:outline-offset-1";
 const inputStyle = { borderColor: "var(--hairline)", outlineColor: "var(--accent)" };
+const checkbox = "h-4 w-4 shrink-0";
+const checkboxStyle = { accentColor: "var(--accent)" };
 
 export default async function WatchlistPage() {
   if (!(await isAllowed())) return <NotAllowedNotice />;
@@ -27,10 +29,10 @@ export default async function WatchlistPage() {
       <Card>
         <CardHeader
           title="Watchlist"
-          hint="The ETFs the advisor may recommend, and the share of your portfolio you want each to be. Use exact NSE symbols. Leave a target blank to score that ETF on cheapness alone."
+          hint="The ETFs the advisor may recommend, and the share of your portfolio you want each to be. Use exact NSE symbols. Leave a target blank to score that ETF on cheapness alone. Tick “far from NAV” for international or thinly traded ETFs: when there is no NAV to check their premium against, they are refused instead of given the benefit of the doubt."
         />
         <ActionForm action={addWatchlistItem} resetOnSuccess className="p-4 sm:p-5">
-          <div className="grid gap-3 sm:grid-cols-[11rem_1fr_7rem_auto] sm:items-end">
+          <div className="grid gap-3 sm:grid-cols-[11rem_1fr_7rem_auto_auto] sm:items-end">
             <label className="block">
               <span className="mb-1 block text-xs font-medium" style={{ color: "var(--ink-2)" }}>
                 NSE symbol
@@ -73,6 +75,15 @@ export default async function WatchlistPage() {
                 className={`${input} tnum w-full`}
                 style={inputStyle}
               />
+            </label>
+            <label className="flex min-h-11 items-center gap-2 text-sm">
+              <input
+                name="premium_sensitive"
+                type="checkbox"
+                className={checkbox}
+                style={checkboxStyle}
+              />
+              Can trade far from NAV
             </label>
             <SubmitButton pendingText="Adding…" className="min-h-11 w-full sm:w-auto">
               Add
@@ -145,6 +156,18 @@ export default async function WatchlistPage() {
                         className={`${input} tnum w-full sm:w-20`}
                         style={inputStyle}
                       />
+                    </label>
+
+                    <label className="flex min-h-11 items-center gap-2 text-sm sm:shrink-0">
+                      <input
+                        name="premium_sensitive"
+                        type="checkbox"
+                        defaultChecked={item.premiumSensitive}
+                        aria-label={`${item.symbol} can trade far from NAV`}
+                        className={checkbox}
+                        style={checkboxStyle}
+                      />
+                      Far from NAV
                     </label>
 
                     <SubmitButton variant="ghost" pendingText="…" className="min-h-11 sm:shrink-0">

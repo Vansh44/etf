@@ -186,26 +186,33 @@ insert into watchlist (symbol, name) values
   ('INFRAIETF', 'ICICI Prudential Nifty Infrastructure ETF')
 on conflict (symbol) do nothing;
 
--- Units and average buy price, as reported by the Groww holdings endpoint.
+-- Units and average buy price, as on the app's Portfolio page on 2026-10-21.
+-- Inserts only: a symbol you already have keeps its own numbers, so re-running
+-- this file never overwrites what you have entered since. The flip side is that
+-- a holding you remove in the app comes back if it is still listed here.
 insert into holdings (symbol, units, avg_price) values
-  ('MOMIDMTM',  45,  62.61),
-  ('ALPHA',     10,  49.18),
-  ('MODEFENCE', 39,  98.33),
-  ('MAKEINDIA', 12, 158.06),
-  ('BFSI',       0,  null),
-  ('MON100',     1, 285.94),
-  ('INFRAIETF', 30,  96.88),
-  ('GOLDBEES',  92, 119.06),   -- held, not on the watchlist
-  ('SILVERBEES', 20, 210.40)   -- held, not on the watchlist
+  ('MOMIDMTM',    45,  62.61),
+  ('ALPHA',       10,  49.18),
+  ('MODEFENCE',   39,  98.33),
+  ('MAKEINDIA',   12, 158.06),
+  ('MON100',       7, 325.79),
+  ('INFRAIETF',   30,  96.88),
+  ('GOLDBEES',    92, 119.06),   -- held, not on the watchlist
+  ('SILVERBEES',  20, 210.40),   -- held, not on the watchlist
+  ('NIFTYBEES',   15, 278.61),   -- held, not on the watchlist
+  ('JUNIORBEES',   2, 781.82),   -- held, not on the watchlist
+  ('MIDCAPETF',  250,  23.82),   -- held, not on the watchlist
+  ('MOSMALL250', 166,  17.94)    -- held, not on the watchlist
 on conflict (symbol) do nothing;
 
 -- If your holdings rows already exist from an earlier run, this fills in the
 -- average prices without touching your unit counts.
 update holdings h set avg_price = v.avg_price
 from (values
-  ('MOMIDMTM',  62.61), ('ALPHA',     49.18), ('MODEFENCE',  98.33),
-  ('MAKEINDIA', 158.06), ('MON100',  285.94), ('INFRAIETF',  96.88),
-  ('GOLDBEES',  119.06), ('SILVERBEES', 210.40)
+  ('MOMIDMTM',    62.61), ('ALPHA',      49.18), ('MODEFENCE',   98.33),
+  ('MAKEINDIA',  158.06), ('MON100',    325.79), ('INFRAIETF',   96.88),
+  ('GOLDBEES',   119.06), ('SILVERBEES', 210.40), ('NIFTYBEES',  278.61),
+  ('JUNIORBEES', 781.82), ('MIDCAPETF',   23.82), ('MOSMALL250',  17.94)
 ) as v(symbol, avg_price)
 where h.symbol = v.symbol and h.avg_price is null;
 
@@ -370,3 +377,25 @@ do $$ begin
   alter table prices add constraint prices_premium_history_is_array
     check (jsonb_typeof(premium_history) = 'array');
 exception when duplicate_object then null; end $$;
+
+
+-- ============================================================================
+--  MIGRATION — premium-sensitive ETFs fail closed
+--  Safe to re-run. Apply by pasting this whole file again.
+--
+--  Until this is applied the app reads the watchlist without the flag (every
+--  ETF treated as not sensitive) and saving on the Watchlist page asks you to
+--  run this file.
+-- ============================================================================
+
+-- ─── Which ETFs can trade far from NAV ──────────────────────────────────────
+-- International funds capped by the SEBI overseas limit, thin sector funds. For
+-- these, a premium that cannot be checked — no iNAV and no usable NAV — means
+-- no purchase, rather than the benefit of the doubt every other ETF gets.
+--
+-- MON100 is seeded on, inside the same block as the column, so it happens once
+-- on creation: a re-run never undoes a deliberate change made in the app.
+do $$ begin
+  alter table watchlist add column premium_sensitive boolean not null default false;
+  update watchlist set premium_sensitive = true where symbol = 'MON100';
+exception when duplicate_column then null; end $$;

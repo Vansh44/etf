@@ -1,33 +1,32 @@
-readme_content = """# 📈 Groww Cloud Quant: ETF Pullback Strategy
+# ETF Advisor
 
-A fully automated, stateless quantitative trading algorithm built for **Groww Cloud**. This bot scans a curated watchlist of Indian ETFs, identifies the optimal daily target using a volatility-adjusted pullback strategy, and autonomously executes a limit order right before market close.
+Tells you which ETF on your watchlist is the best buy right now and how many
+units fit your budget. **It places no orders** — you place the trade yourself
+in the Groww app.
 
-## 🧠 The Algorithm (Hybrid Strategy)
-This bot operates on a **Multi-Tiered Selection System** to balance capital preservation with aggressive opportunity hunting. It runs daily at 3:00 PM IST.
+Earlier versions of this repo were a Groww Cloud bot that placed orders on its
+own. That code is gone; nothing here trades.
 
-### Tier 1: The Trend Filter (Alpha Seeking)
-The algorithm calculates the 50-Day and 100-Day Simple Moving Averages (SMA) using pure Pandas math. It filters the watchlist to only include ETFs that are in a mathematically confirmed structural uptrend:
-`Current Price > 50-DMA > 100-DMA`
+## What's here
 
-From this list of healthy assets, it calculates the **3-Period Relative Strength Index (RSI)** and selects the ETF with the lowest RSI. *Goal: Buy the steepest short-term dip within a strong long-term macro trend.*
+| Path | What it is |
+| --- | --- |
+| `web/` | **The advisor.** A Next.js app on Vercel, backed by Supabase, behind Google sign-in and an email allowlist. All scoring lives in `web/src/lib/strategy.ts`. Start with [web/README.md](web/README.md). |
+| `scripts/fetch_prices.py` | The price fetcher. Reads the watchlist and holdings from Supabase, pulls daily closes and live prices from Yahoo, end-of-day NAVs from AMFI and intraday iNAVs from NSE, and writes them to the `prices` table. |
+| `.github/workflows/fetch-prices.yml` | Runs the fetcher every 30 minutes during NSE hours and once after the close. It runs in GitHub Actions because Yahoo blocks requests that don't look like a real browser, which Vercel can't fake. |
+| `main.py`, `watchlist.py`, `portfolio.py` | The original standalone command-line advisor. It reads its own two config files rather than Supabase, and it lacks target allocations, the premium-over-NAV check and the stale-data refusal — see [The local Python script has diverged](web/README.md#the-local-python-script-has-diverged). |
+| `trades.log` | What `main.py` writes as it runs. |
 
-### Tier 2: The Fallback (Bear Market Regime)
-If the broader market is crashing and *zero* ETFs pass the Tier 1 trend filter, the bot does not sit idle. It falls back to scanning the entire watchlist and selects the single most oversold asset based purely on RSI. *Goal: Ensure the daily capital allocation is always deployed at the most statistically favorable discount.*
+## Running it
 
-## ⚡ Core Features
-* **Stateless Execution:** No databases, no local ledger files. The bot calculates its purchasing power dynamically (`Daily Allocation // Price`) ensuring seamless operation on ephemeral cloud servers.
-* **Smart Scheduling:** Includes a hardcoded `datetime` gatekeeper that automatically aborts execution on weekends (Saturdays/Sundays) and listed NSE holidays.
-* **Native Math:** Stripped of heavy third-party technical analysis libraries. Uses lightning-fast native `pandas` matrix mathematics to calculate DMA and RSI.
-* **TOTP Automation:** Bypasses the 6:00 AM daily API token reset by dynamically generating fresh Access Tokens using `pyotp` seconds before execution.
-* **Email Telemetry:** Sends detailed trade execution reports directly to your inbox via SMTP.
+The web app: follow [Setup](web/README.md#setup) in `web/README.md`.
 
-## 🚀 Deployment Guide (Groww Cloud)
+The command-line advisor: put your ETFs in `watchlist.py` and your units and
+budget in `portfolio.py`, then
 
-Because Groww Cloud uses ephemeral containers, this project is consolidated into a single `main.py` file.
+```bash
+pip install yfinance pandas
+python3 main.py
+```
 
-### 1. Requirements Setup
-In your Groww Strategy dashboard, ensure the **Requirements** tab includes:
-```text
-pandas
-growwapi
-pyotp
+This tool reports numbers. It is not financial advice.

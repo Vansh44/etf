@@ -1,25 +1,51 @@
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_SETTINGS, type Settings } from "@/lib/strategy";
 
-export type WatchlistItem = { symbol: string; name: string; targetPct: number | null };
+export type WatchlistItem = {
+  symbol: string;
+  name: string;
+  targetPct: number | null;
+  /** Fail closed on an uncheckable premium — see WatchlistItem in strategy.ts. */
+  premiumSensitive: boolean;
+};
 export type Holding = { symbol: string; units: number; avgPrice: number | null };
 export type AllowedEmail = { email: string; added_by: string | null; added_at: string };
 
 // The defaults live with the strategy that consumes them — one source of truth.
 export { DEFAULT_SETTINGS };
 
+type WatchlistRow = {
+  symbol: string;
+  name: string;
+  target_pct: number | string | null;
+  // Added by the premium-sensitive migration. Absent, not null, on a database
+  // that predates it — hence the legacy select below.
+  premium_sensitive?: boolean;
+};
+
 export async function getWatchlist(): Promise<WatchlistItem[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const current = await supabase
     .from("watchlist")
-    .select("symbol, name, target_pct")
+    .select("symbol, name, target_pct, premium_sensitive")
     .order("symbol");
 
-  return (data ?? []).map((row) => ({
-    symbol: row.symbol as string,
-    name: row.name as string,
+  // Selecting a missing column fails the whole request, and an empty watchlist
+  // would read as "add some ETFs first". Fall back to the pre-migration columns
+  // so the advisor keeps working, with no ETF failing closed, until schema.sql
+  // is applied.
+  const legacy = current.error
+    ? await supabase.from("watchlist").select("symbol, name, target_pct").order("symbol")
+    : null;
+
+  const rows = ((current.error ? legacy?.data : current.data) ?? []) as WatchlistRow[];
+
+  return rows.map((row) => ({
+    symbol: row.symbol,
+    name: row.name,
     // numeric arrives as a string from PostgREST; null means "no target set".
     targetPct: row.target_pct === null ? null : Number(row.target_pct),
+    premiumSensitive: row.premium_sensitive === true,
   }));
 }
 

@@ -88,6 +88,9 @@ function friendly(error: { message: string; code?: string }): string {
   if (error.message.includes("violates row-level security")) {
     return "Your account is not allowed to make changes.";
   }
+  if (error.message.includes("premium_sensitive")) {
+    return "The database predates the premium-sensitive flag — run web/supabase/schema.sql in the Supabase SQL editor, then save again.";
+  }
   return error.message;
 }
 
@@ -106,10 +109,16 @@ function parseTarget(raw: FormDataEntryValue | null): number | null | "invalid" 
   return value;
 }
 
+/** A checkbox posts "on" when ticked and nothing at all when not. */
+function parseFlag(raw: FormDataEntryValue | null): boolean {
+  return raw === "on";
+}
+
 export async function addWatchlistItem(formData: FormData): Promise<ActionResult> {
   const symbol = normaliseSymbol(formData.get("symbol"));
   const name = String(formData.get("name") ?? "").trim();
   const target = parseTarget(formData.get("target_pct"));
+  const premiumSensitive = parseFlag(formData.get("premium_sensitive"));
 
   if (!symbol) return { ok: false, error: "Symbol is required." };
   if (!name) return { ok: false, error: "Name is required." };
@@ -120,7 +129,7 @@ export async function addWatchlistItem(formData: FormData): Promise<ActionResult
   const supabase = await createClient();
   const { error } = await supabase
     .from("watchlist")
-    .insert({ symbol, name, target_pct: target });
+    .insert({ symbol, name, target_pct: target, premium_sensitive: premiumSensitive });
   if (error) return { ok: false, error: friendly(error) };
 
   revalidatePath("/watchlist");
@@ -132,6 +141,7 @@ export async function updateWatchlistItem(formData: FormData): Promise<ActionRes
   const symbol = normaliseSymbol(formData.get("symbol"));
   const name = String(formData.get("name") ?? "").trim();
   const target = parseTarget(formData.get("target_pct"));
+  const premiumSensitive = parseFlag(formData.get("premium_sensitive"));
 
   if (!name) return { ok: false, error: "Name cannot be empty." };
   if (target === "invalid") {
@@ -141,7 +151,7 @@ export async function updateWatchlistItem(formData: FormData): Promise<ActionRes
   const supabase = await createClient();
   const { error } = await supabase
     .from("watchlist")
-    .update({ name, target_pct: target })
+    .update({ name, target_pct: target, premium_sensitive: premiumSensitive })
     .eq("symbol", symbol);
   if (error) return { ok: false, error: friendly(error) };
 

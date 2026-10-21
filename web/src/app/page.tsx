@@ -2,7 +2,13 @@ import Link from "next/link";
 import { getHoldings, getSettings, getWatchlist } from "@/lib/data";
 import { isAllowed } from "@/lib/supabase/server";
 import { getPrices } from "@/lib/prices";
-import { runStrategy, PRICE_WINDOW, TREND_LONG, TREND_SHORT } from "@/lib/strategy";
+import {
+  runStrategy,
+  HIGH_LOOKBACK,
+  PRICE_WINDOW,
+  TREND_LONG,
+  TREND_SHORT,
+} from "@/lib/strategy";
 import { valuePortfolio } from "@/lib/valuation";
 import { isDispatchConfigured } from "@/lib/github";
 import { NotAllowedNotice } from "@/components/NotAllowedNotice";
@@ -69,9 +75,8 @@ export default async function AdvisorPage() {
   });
 
   const { totals } = valuePortfolio(holdings, prices, new Set(watchlist.map((w) => w.symbol)));
-  const { recommendation: pick, ranked, excluded, skipped, freshness, targetSum } = result;
+  const { recommendation: pick, ranked, excluded, skipped, freshness, warnings } = result;
   const heldUnits = holdings.find((h) => h.symbol === pick?.symbol)?.units ?? 0;
-  const targetsOff = watchlist.some((w) => w.targetPct !== null) && Math.abs(targetSum - 100) > 0.5;
 
   return (
     <main className="mx-auto max-w-6xl space-y-4 p-3 sm:space-y-5 sm:p-6">
@@ -114,15 +119,20 @@ export default async function AdvisorPage() {
         </Card>
       )}
 
-      {targetsOff && (
+      {/* ── non-fatal problems the strategy flagged ─────────── */}
+      {warnings.length > 0 && (
         <Card className="p-4" as="div">
-          <p className="text-sm">
-            Your targets add up to <strong>{targetSum.toFixed(1)}%</strong>, not 100%. Scoring still
-            works, but the gaps won&apos;t mean quite what you expect —{" "}
+          <ul className="space-y-1.5 text-sm">
+            {warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs" style={{ color: "var(--ink-2)" }}>
+            Targets and the far-from-NAV flag are set on the{" "}
             <Link href="/watchlist" className="underline">
-              adjust them
-            </Link>
-            .
+              Watchlist
+            </Link>{" "}
+            page.
           </p>
         </Card>
       )}
@@ -173,7 +183,7 @@ export default async function AdvisorPage() {
                       {pick.confidence < 1 && (
                         <> × {(pick.confidence * 100).toFixed(0)}% confidence</>
                       )}{" "}
-                      — {pick.ddNow.toFixed(1)}% off its {TREND_LONG}-day high, deeper than{" "}
+                      — {pick.ddNow.toFixed(1)}% off its {HIGH_LOOKBACK}-day high, deeper than{" "}
                       {pick.ddPctile.toFixed(0)}% of its own dips
                     </p>
                   </div>
