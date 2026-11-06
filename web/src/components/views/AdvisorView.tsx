@@ -269,12 +269,11 @@ function PickCard({
       </dl>
 
       <p className="border-t border-hairline bg-surface-2 px-4 py-3 text-[13px] leading-relaxed text-ink-2 sm:px-5">
-        Place it yourself in Groww — check the live price there first. Once it fills, set {pick.symbol} to{" "}
-        <strong className="text-ink">{heldUnits + pick.qty} units</strong> on{" "}
-        <Link href={portfolioHref} className="font-medium text-accent">
-          Portfolio
-        </Link>
-        .
+        Place it yourself in Groww — check the live price there first. Once it fills,{" "}
+        <Link href={`${portfolioHref}#${pick.symbol}`} className="font-medium text-accent">
+          record the buy on Portfolio
+        </Link>{" "}
+        at the price you paid, taking you to <strong className="text-ink">{heldUnits + pick.qty} units</strong>.
       </p>
     </Card>
   );

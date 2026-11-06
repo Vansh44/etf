@@ -38,19 +38,25 @@ const COLUMNS =
   "symbol, live_price, closes, last_bar, nav, nav_date, inav, inav_at, premium_history, fetched_at";
 const LEGACY_COLUMNS = "symbol, live_price, closes, last_bar, nav, nav_date, fetched_at";
 
-export async function getPrices(symbols: string[]): Promise<PriceLoad> {
-  if (symbols.length === 0) return { data: new Map(), missing: [] };
-
+/**
+ * Every stored price row, keyed by symbol.
+ *
+ * Deliberately not filtered to the symbols a page needs: those are known only
+ * once the watchlist and holdings have loaded, and waiting for them puts a
+ * whole extra round trip in front of every page. Fetched alongside them
+ * instead, and narrowed with `pricesFor`. The table holds one row per symbol
+ * the fetcher has ever seen — a few dozen at most — so reading it whole is
+ * cheap.
+ */
+export async function getAllPrices(): Promise<Map<string, PriceData>> {
   const supabase = await createClient();
-  const current = await supabase.from("prices").select(COLUMNS).in("symbol", symbols);
+  const current = await supabase.from("prices").select(COLUMNS);
 
   // Selecting a column that does not exist fails the whole request, and an
   // unpriced watchlist blocks every recommendation. Falling back to the
   // pre-migration columns keeps the advisor working — with the weaker EOD-NAV
   // premium check — until schema.sql is applied.
-  const legacy = current.error
-    ? await supabase.from("prices").select(LEGACY_COLUMNS).in("symbol", symbols)
-    : null;
+  const legacy = current.error ? await supabase.from("prices").select(LEGACY_COLUMNS) : null;
 
   const rows = ((current.error ? legacy?.data : current.data) ?? []) as PriceRow[];
 
@@ -89,5 +95,15 @@ export async function getPrices(symbols: string[]): Promise<PriceLoad> {
     });
   }
 
+  return data;
+}
+
+/** The stored rows for `symbols`, and which of them have none. */
+export function pricesFor(all: Map<string, PriceData>, symbols: string[]): PriceLoad {
+  const data = new Map<string, PriceData>();
+  for (const symbol of symbols) {
+    const price = all.get(symbol);
+    if (price) data.set(symbol, price);
+  }
   return { data, missing: symbols.filter((s) => !data.has(s)) };
 }

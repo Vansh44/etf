@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { dispatchPriceFetch } from "@/lib/github";
+import { afterBuy } from "@/lib/valuation";
 
 /**
  * Server Actions for every write. All go through the anon-key client, so the
@@ -31,12 +32,15 @@ export async function startRun(): Promise<RunState> {
   const { data: allowed } = await supabase.rpc("is_allowed");
   if (allowed !== true) return { phase: "error", error: "Your account is not allowed." };
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("prices")
     .select("fetched_at")
     .order("fetched_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  // null means "no prices yet", after which any row counts as fresh. A failed
+  // read must not pass for that, or the first poll would stop the wait early.
+  if (error) return { phase: "error", error: `Couldn't read the stored prices: ${error.message}` };
   const since: string | null = data?.fetched_at ?? null;
 
   const outcome = await dispatchPriceFetch();
@@ -52,7 +56,8 @@ export async function startRun(): Promise<RunState> {
 
 /**
  * Has the fetcher written newer prices than `since`?
- * Polled by the client while a run is in flight.
+ * Polled by the client while a run is in flight. When the answer is yes, the
+ * revalidation makes this same response carry the re-rendered page.
  */
 export async function checkRun(since: string | null): Promise<{ fresh: boolean; at: string | null }> {
   const supabase = await createClient();
@@ -187,12 +192,13 @@ export async function upsertHolding(formData: FormData): Promise<ActionResult> {
     return { ok: false, error: "Units must be a whole number of 0 or more." };
   }
 
-  // Blank is meaningful: "I don't know my cost basis". Stored as null, and the
-  // UI then shows "—" for invested and P&L instead of inventing a number.
+  // Blank or 0 is meaningful: "I don't know my cost basis". Stored as null, and
+  // the UI then shows "—" for invested and P&L instead of inventing a number.
+  // With no units there is no basis to know, whatever was typed.
   let avgPrice: number | null = null;
-  if (avgRaw !== "") {
+  if (units > 0 && avgRaw !== "" && Number(avgRaw) !== 0) {
     avgPrice = Number(avgRaw);
-    if (!Number.isFinite(avgPrice) || avgPrice <= 0) {
+    if (!Number.isFinite(avgPrice) || avgPrice < 0) {
       return { ok: false, error: "Average price must be a positive number, or left blank." };
     }
   }
@@ -200,6 +206,49 @@ export async function upsertHolding(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from("holdings").upsert(
     { symbol, units, avg_price: avgPrice, updated_at: new Date().toISOString() },
+    { onConflict: "symbol" },
+  );
+  if (error) return { ok: false, error: friendly(error) };
+
+  revalidatePath("/portfolio");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+/**
+ * Adds a purchase to a holding: the units are added, and the average price
+ * becomes the weighted average of what was held and what was just bought.
+ * Read from the database rather than the page, which may be out of date.
+ */
+export async function recordBuy(formData: FormData): Promise<ActionResult> {
+  const symbol = normaliseSymbol(formData.get("symbol"));
+  const bought = Number(String(formData.get("units") ?? "").trim());
+  const price = Number(String(formData.get("price") ?? "").trim());
+
+  if (!symbol) return { ok: false, error: "Symbol is required." };
+  if (!Number.isInteger(bought) || bought < 1) {
+    return { ok: false, error: "Units bought must be a whole number of 1 or more." };
+  }
+  if (!Number.isFinite(price) || price <= 0) {
+    return { ok: false, error: "Enter the price you paid per unit." };
+  }
+
+  const supabase = await createClient();
+  const { data: row, error: readError } = await supabase
+    .from("holdings")
+    .select("units, avg_price")
+    .eq("symbol", symbol)
+    .maybeSingle();
+  if (readError) return { ok: false, error: friendly(readError) };
+
+  const next = afterBuy(
+    { units: Number(row?.units ?? 0), avgPrice: row?.avg_price == null ? null : Number(row.avg_price) },
+    bought,
+    price,
+  );
+
+  const { error } = await supabase.from("holdings").upsert(
+    { symbol, units: next.units, avg_price: next.avgPrice, updated_at: new Date().toISOString() },
     { onConflict: "symbol" },
   );
   if (error) return { ok: false, error: friendly(error) };

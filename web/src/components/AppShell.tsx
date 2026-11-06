@@ -1,8 +1,10 @@
 import { Nav } from "@/components/Nav";
+import { RunProvider } from "@/components/RunButton";
 
 /**
  * The signed-in frame: header, bottom tab bar on phones, and content padded
  * so nothing hides under the bar (64px plus the iOS home-indicator inset).
+ * It also holds the Refresh run, so a fetch carries on across tabs.
  */
 export function AppShell({
   email,
@@ -16,7 +18,9 @@ export function AppShell({
   return (
     <>
       <Nav email={email} base={base} />
-      <div className="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pb-0">{children}</div>
+      <RunProvider>
+        <div className="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pb-0">{children}</div>
+      </RunProvider>
     </>
   );
 }

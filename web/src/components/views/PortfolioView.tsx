@@ -1,7 +1,8 @@
-import { deleteHolding, upsertHolding } from "@/app/actions";
+import { upsertHolding } from "@/app/actions";
 import type { HoldingValuation, PortfolioTotals } from "@/lib/valuation";
 import { Page } from "@/components/AppShell";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
+import { HoldingEditor } from "@/components/HoldingEditor";
 import { ChevronRightIcon, PlusIcon } from "@/components/icons";
 import {
   Card,
@@ -90,11 +91,13 @@ export function PortfolioView({ rows, totals }: PortfolioData) {
         <CardHeader
           title="Holdings"
           count={held}
-          hint="Include every ETF you own, even ones off the watchlist — they count toward your weights. Tap one to edit."
+          hint="Every watchlist ETF is here, bought or not. Tap one to record a buy or correct its numbers."
         />
 
         {rows.length === 0 ? (
-          <EmptyState title="No holdings recorded">Add one below. Leave this empty if you hold nothing yet.</EmptyState>
+          <EmptyState title="Nothing here yet">
+            ETFs you add to the Watchlist show up here, ready for their first buy. Add anything else you own below.
+          </EmptyState>
         ) : (
           <>
             <div
@@ -126,16 +129,18 @@ export function PortfolioView({ rows, totals }: PortfolioData) {
 
 function HoldingRow({ row }: { row: HoldingValuation }) {
   const pnlTone = row.pnl === null ? "text-ink-2" : row.pnl >= 0 ? "text-gain" : "text-loss";
+  // Nothing held reads as zeros, like a broker's row, not as an unknown price.
+  const avg = row.units === 0 ? 0 : row.avgPrice;
 
   return (
-    <details>
+    <details id={row.symbol} className="scroll-mt-20">
       <summary className="px-4 py-3.5 transition hover:bg-surface-2/60 active:bg-surface-2 sm:px-5">
         {/* phone and tablet: the three-line broker row */}
         <div className="lg:hidden">
           <div className="flex items-baseline justify-between gap-3 text-xs text-ink-2">
             <span className="tnum">
               Qty {row.units}
-              {row.avgPrice !== null && <> · Avg {rupee(row.avgPrice)}</>}
+              {avg !== null && <> · Avg {rupee(avg)}</>}
             </span>
             <span className={`tnum font-semibold ${pnlTone}`}>
               {row.pnlPct === null ? "—" : signedPct(row.pnlPct)}
@@ -172,7 +177,7 @@ function HoldingRow({ row }: { row: HoldingValuation }) {
             {!row.onWatchlist && <Pill>Off watchlist</Pill>}
           </span>
           <span className="tnum text-right">{row.units}</span>
-          <span className="tnum text-right">{row.avgPrice !== null ? rupee(row.avgPrice) : "—"}</span>
+          <span className="tnum text-right">{avg !== null ? rupee(avg) : "—"}</span>
           <span className="tnum text-right">{row.livePrice !== null ? rupee(row.livePrice) : "—"}</span>
           <span className="tnum text-right">{row.invested !== null ? rupee0(row.invested) : "—"}</span>
           <span className="tnum text-right font-medium">{row.current !== null ? rupee0(row.current) : "—"}</span>
@@ -192,53 +197,13 @@ function HoldingRow({ row }: { row: HoldingValuation }) {
       </summary>
 
       <div className="border-t border-hairline bg-surface-2/60 px-4 py-4 sm:px-5">
-        <ActionForm
-          action={upsertHolding}
-          collapseOnSuccess
-          className="grid grid-cols-2 gap-3 sm:grid-cols-[8rem_10rem_auto] sm:items-end"
-        >
-          <input type="hidden" name="symbol" value={row.symbol} />
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-medium text-ink-2">Units</span>
-            <input
-              name="units"
-              type="number"
-              inputMode="numeric"
-              min="0"
-              step="1"
-              defaultValue={row.units}
-              aria-label={`Units of ${row.symbol}`}
-              className={`${inputClass} tnum w-full`}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-medium text-ink-2">Avg buy price</span>
-            <input
-              name="avg_price"
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              defaultValue={row.avgPrice ?? ""}
-              placeholder="unknown"
-              aria-label={`Average price of ${row.symbol}`}
-              className={`${inputClass} tnum w-full`}
-            />
-          </label>
-          <SubmitButton pendingText="Saving…" className="col-span-2 w-full sm:col-span-1 sm:w-auto">
-            Save
-          </SubmitButton>
-        </ActionForm>
-        <ActionForm
-          action={deleteHolding}
-          confirm={`Remove ${row.symbol} from your records? This only edits this app — it does not sell anything.`}
-          className="mt-2"
-        >
-          <input type="hidden" name="symbol" value={row.symbol} />
-          <SubmitButton variant="danger" size="sm" pendingText="Removing…">
-            Remove {row.symbol}
-          </SubmitButton>
-        </ActionForm>
+        <HoldingEditor
+          symbol={row.symbol}
+          units={row.units}
+          avgPrice={row.avgPrice}
+          livePrice={row.livePrice}
+          onWatchlist={row.onWatchlist}
+        />
       </div>
     </details>
   );
@@ -252,13 +217,13 @@ function AddHolding() {
           <span className="grid h-8 w-8 place-items-center rounded-full bg-accent-soft">
             <PlusIcon className="h-[18px] w-[18px]" />
           </span>
-          Add or update a holding
+          Add another ETF you own
           <ChevronRightIcon className="chevron ml-auto h-4 w-4 text-ink-2" />
         </summary>
         <div className="border-t border-hairline px-4 py-4 sm:px-5">
           <p className="mb-3 text-xs leading-relaxed text-ink-2">
-            Entering a symbol you already hold overwrites it. Leave the average price blank if you don&apos;t know
-            it.
+            Anything else you own, like GOLDBEES, so your weights add up. Entering a symbol you already hold overwrites
+            it. Leave the average price blank if you don&apos;t know it.
           </p>
           <ActionForm
             action={upsertHolding}

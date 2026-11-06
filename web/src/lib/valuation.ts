@@ -7,6 +7,10 @@ import type { PriceData } from "./strategy";
  * basis is unknown. Those rows contribute to current value but NOT to invested
  * or P&L — otherwise the totals would silently understate what you paid and
  * report a fictional profit.
+ *
+ * Every watchlist ETF gets a row, held or not, so the first buy of one is
+ * recorded from its own row. Zero units is nothing invested, not an unknown
+ * cost basis, so those rows add nothing to any total or warning.
  */
 
 export type HoldingValuation = {
@@ -46,14 +50,19 @@ export function valuePortfolio(
   prices: Map<string, PriceData>,
   watchlistSymbols: Set<string>,
 ): { rows: HoldingValuation[]; totals: PortfolioTotals } {
-  const rows: HoldingValuation[] = holdings.map((h) => {
+  const held = new Set(holdings.map((h) => h.symbol));
+  const notHeld = Array.from(watchlistSymbols)
+    .filter((symbol) => !held.has(symbol))
+    .map((symbol) => ({ symbol, units: 0, avgPrice: null }));
+
+  const rows: HoldingValuation[] = [...holdings, ...notHeld].map((h) => {
     const price = prices.get(h.symbol);
     const livePrice = price?.livePrice ?? null;
 
-    const invested = h.avgPrice !== null ? h.units * h.avgPrice : null;
+    const invested = h.units === 0 ? 0 : h.avgPrice !== null ? h.units * h.avgPrice : null;
     const current = livePrice !== null ? h.units * livePrice : null;
 
-    const pnl = invested !== null && current !== null ? current - invested : null;
+    const pnl = h.units > 0 && invested !== null && current !== null ? current - invested : null;
     const pnlPct = pnl !== null && invested !== null && invested > 0 ? (pnl / invested) * 100 : null;
 
     // Previous close is the last daily bar. The live price may already be
@@ -87,7 +96,7 @@ export function valuePortfolio(
   for (const row of rows) {
     row.weight = currentTotal > 0 ? ((row.current ?? 0) / currentTotal) * 100 : 0;
   }
-  rows.sort((a, b) => (b.current ?? 0) - (a.current ?? 0));
+  rows.sort((a, b) => (b.current ?? 0) - (a.current ?? 0) || a.symbol.localeCompare(b.symbol));
 
   // Only rows with a known basis AND a price can contribute to P&L, or the
   // comparison would be between different sets of holdings.
@@ -114,4 +123,23 @@ export function valuePortfolio(
       countUnpriced: rows.filter((r) => r.units > 0 && r.current === null).length,
     },
   };
+}
+
+/**
+ * Units and average price after buying `bought` more at `price` — the sum a
+ * broker does for you, so recording a buy never means working out a weighted
+ * average by hand. Rounded to the paisa, as brokers show it.
+ *
+ * If units already held have no average price, the new one is unknown too:
+ * averaging only the units with a price would invent a cost basis.
+ */
+export function afterBuy(
+  holding: { units: number; avgPrice: number | null },
+  bought: number,
+  price: number,
+): { units: number; avgPrice: number | null } {
+  const units = holding.units + bought;
+  if (holding.units > 0 && holding.avgPrice === null) return { units, avgPrice: null };
+  const cost = holding.units * (holding.avgPrice ?? 0) + bought * price;
+  return { units, avgPrice: Number((cost / units).toFixed(2)) };
 }

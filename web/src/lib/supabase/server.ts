@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 /**
  * Supabase client for Server Components, Server Actions and Route Handlers.
@@ -34,14 +35,17 @@ export async function createClient() {
   );
 }
 
-/** The signed-in user's email, or null. */
-export async function getSessionEmail(): Promise<string | null> {
+/**
+ * The signed-in user's email, or null. Once per request: the layout and the
+ * Settings page both ask, and each ask is a round trip to Supabase Auth.
+ */
+export const getSessionEmail = cache(async (): Promise<string | null> => {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   return user?.email ?? null;
-}
+});
 
 /**
  * Is the signed-in user on the allowlist?

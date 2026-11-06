@@ -8,14 +8,15 @@ import { SettingsView } from "@/components/views/SettingsView";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  if (!(await isAllowed())) return <NotAllowedNotice />;
-
-  const [settings, emails, me, cookieStore] = await Promise.all([
+  // All at once — see the Advisor page for why the allowlist check can join in.
+  const [allowed, settings, emails, me, cookieStore] = await Promise.all([
+    isAllowed(),
     getSettings(),
     getAllowedEmails(),
     getSessionEmail(),
     cookies(),
   ]);
+  if (!allowed) return <NotAllowedNotice />;
 
   return (
     <SettingsView

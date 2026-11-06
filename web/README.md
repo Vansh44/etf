@@ -278,7 +278,7 @@ yourself out entirely.
 | --- | --- |
 | **Advisor** | Runs the strategy: recommendation with its score breakdown, ranking, excluded ETFs and why, warnings, portfolio summary |
 | **Watchlist** | ETFs the advisor may recommend, each one's target allocation, and whether it can trade far from NAV. Use exact NSE symbols |
-| **Portfolio** | What you own, with average buy prices for P&L. Include ETFs *not* on the watchlist — they count toward your total |
+| **Portfolio** | What you own, with average buy prices for P&L. Every watchlist ETF is listed, at 0 units until you buy it. **Record a buy** adds the units and works out the new average price; **Set totals** is for corrections and sells. Add ETFs *not* on the watchlist too — they count toward your total |
 | **Settings** | Light / dark / follow-the-phone theme, budget, premium limits, history and freshness limits, NSE holidays, limit buffer, and the email allowlist. The 50/50 score split is fixed in code |
 
 Prices are whatever the last Action run wrote. The dashboard shows the newest
@@ -345,8 +345,9 @@ score and the ranking it produces, the absence of a trend filter, iNAV vs EOD
 NAV selection and staleness, the premium percentile gate and noise floor,
 premium-sensitive ETFs failing closed, the NSE session calendar, stale-data
 refusal, the integrity gates (unpriced holdings, target sums), and order
-sizing — including the one-unit minimum when a unit costs more than the budget.
-Exits non-zero on any failure.
+sizing — including the one-unit minimum when a unit costs more than the budget —
+and the portfolio: unheld watchlist ETFs listed without touching any total, and
+the weighted average a recorded buy produces. Exits non-zero on any failure.
 
 Fixture note if you add tests: `flat(level)` makes the 14-day average exactly
 `level`, so a live price of 95 on `flat(100)` is precisely 5% below it.

@@ -44,6 +44,7 @@ import json
 import logging
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -531,26 +532,36 @@ def main() -> None:
         return
     log.info(f"Fetching {len(symbols)} symbols: {', '.join(symbols)}")
 
-    # One batched request; yfinance handles the browser TLS impersonation.
+    # Five sources on five hosts, none waiting on another, so they are fetched
+    # side by side. One after the other they were most of the run — and the
+    # Refresh button waits on every second of it.
     tickers = [f"{s}.NS" for s in symbols]
-    frame = yf.download(
-        tickers, period=HISTORY_PERIOD, interval="1d",
-        auto_adjust=False, progress=False, group_by="column", threads=True,
-    )
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        # One batched request; yfinance handles the browser TLS impersonation.
+        history = pool.submit(
+            yf.download, tickers, period=HISTORY_PERIOD, interval="1d",
+            auto_adjust=False, progress=False, group_by="column", threads=True,
+        )
+        # NAV lookup, for the premium-over-underlying check. Best-effort: if
+        # either source is unavailable the prices still get written, just
+        # without NAV.
+        isins_job = pool.submit(isin_map, symbols)
+        navs_job = pool.submit(nav_by_isin)
+        inavs_job = pool.submit(nse_inav, symbols)
+        # The premium series the app ranks today's premium against. None means
+        # the columns are not there yet, in which case nothing premium-related
+        # is written at all — a partial write would look like real data.
+        stored_job = pool.submit(stored_premium_history, symbols)
+
+    frame = history.result()
     if frame is None or frame.empty or "Close" not in frame:
         die("Yahoo returned no data at all. Try again later.")
     closes_frame = frame["Close"]
 
-    # NAV lookup, for the premium-over-underlying check. Best-effort: if either
-    # source is unavailable the prices still get written, just without NAV.
-    isins = isin_map(symbols)
-    navs = nav_by_isin() if isins else {}
-    inavs = nse_inav(symbols)
-
-    # The premium series the app ranks today's premium against. None means the
-    # columns are not there yet, in which case nothing premium-related is
-    # written at all — a partial write would look like real data.
-    stored = stored_premium_history(symbols)
+    isins = isins_job.result()
+    navs = navs_job.result()
+    inavs = inavs_job.result()
+    stored = stored_job.result()
     premium_columns = stored is not None
     if not premium_columns:
         log.warning(

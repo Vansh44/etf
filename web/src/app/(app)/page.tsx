@@ -1,6 +1,6 @@
 import { getHoldings, getSettings, getWatchlist } from "@/lib/data";
 import { isAllowed } from "@/lib/supabase/server";
-import { getPrices } from "@/lib/prices";
+import { getAllPrices, pricesFor } from "@/lib/prices";
 import { runStrategy } from "@/lib/strategy";
 import { valuePortfolio } from "@/lib/valuation";
 import { isDispatchConfigured } from "@/lib/github";
@@ -10,20 +10,23 @@ import { AdvisorEmpty, AdvisorView } from "@/components/views/AdvisorView";
 export const dynamic = "force-dynamic";
 
 export default async function AdvisorPage() {
-  if (!(await isAllowed())) return <NotAllowedNotice />;
-
-  const [watchlist, holdings, settings] = await Promise.all([
+  // One round trip, not three. The allowlist check needn't go first: RLS
+  // already hands a refused account zero rows, which are simply discarded.
+  const [allowed, watchlist, holdings, settings, stored] = await Promise.all([
+    isAllowed(),
     getWatchlist(),
     getHoldings(),
     getSettings(),
+    getAllPrices(),
   ]);
+  if (!allowed) return <NotAllowedNotice />;
 
   const symbols = Array.from(
     new Set([...watchlist.map((w) => w.symbol), ...holdings.map((h) => h.symbol)]),
   );
   if (symbols.length === 0) return <AdvisorEmpty />;
 
-  const { data: prices, missing } = await getPrices(symbols);
+  const { data: prices, missing } = pricesFor(stored, symbols);
 
   const result = runStrategy({
     watchlist,

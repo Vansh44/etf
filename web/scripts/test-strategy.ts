@@ -20,6 +20,7 @@ import {
   type Settings,
   type WatchlistItem,
 } from "../src/lib/strategy.ts";
+import { afterBuy, valuePortfolio } from "../src/lib/valuation.ts";
 
 let pass = 0;
 let fail = 0;
@@ -589,6 +590,51 @@ console.log("\n── BUDGET, SIZING AND PROJECTION ──");
   });
   check("room for more than one unit is never flagged", sizeOrder(100, 250, 0.2).overBudget, false);
 }
+
+console.log("\n── PORTFOLIO: EVERY WATCHLIST ETF HAS A ROW ──");
+
+{
+  const prices = new Map([
+    ["HELD", priceRow({ symbol: "HELD", livePrice: 110 })],
+    ["NEW", priceRow({ symbol: "NEW", livePrice: 50 })],
+    ["GOLD", priceRow({ symbol: "GOLD", livePrice: 20 })],
+  ]);
+  const holdings = [
+    { symbol: "HELD", units: 10, avgPrice: 100 },
+    { symbol: "GOLD", units: 5, avgPrice: null },
+  ];
+  const { rows, totals } = valuePortfolio(holdings, prices, new Set(["HELD", "NEW"]));
+  const fresh = rows.find((r) => r.symbol === "NEW");
+
+  check("a watchlist ETF you don't hold is listed", rows.map((r) => r.symbol), ["HELD", "GOLD", "NEW"]);
+  check("with zero units", fresh?.units, 0);
+  check("and nothing invested, rather than an unknown basis", fresh?.invested, 0);
+  check("and no P&L to report", fresh?.pnl, null);
+  check("and no weight", fresh?.weight, 0);
+  check("a held watchlist ETF is listed once", rows.filter((r) => r.symbol === "HELD").length, 1);
+
+  // The unheld row must leave every figure exactly as the holdings alone give it.
+  const alone = valuePortfolio(holdings, prices, new Set(["HELD"])).totals;
+  check("it changes no total", totals, alone);
+  check("it isn't counted as missing an average price", totals.countWithoutBasis, 1);
+  check("or as unpriced, even with no price at all", valuePortfolio([], new Map(), new Set(["NEW"])).totals.countUnpriced, 0);
+}
+
+console.log("\n── PORTFOLIO: RECORDING A BUY ──");
+
+check("a first buy is bought at its own price", afterBuy({ units: 0, avgPrice: null }, 37, 66.13), {
+  units: 37, avgPrice: 66.13,
+});
+// 45 x 62.61 + 37 x 66.13 = 5264.26 over 82 units = 64.198..., shown to the paisa.
+check("a further buy moves to the weighted average", afterBuy({ units: 45, avgPrice: 62.61 }, 37, 66.13), {
+  units: 82, avgPrice: 64.2,
+});
+check("buying at the average leaves it alone", afterBuy({ units: 10, avgPrice: 50 }, 5, 50), {
+  units: 15, avgPrice: 50,
+});
+check("an unknown average stays unknown rather than guessed", afterBuy({ units: 10, avgPrice: null }, 5, 50), {
+  units: 15, avgPrice: null,
+});
 
 console.log(`\n${fail === 0 ? "✅ ALL PASS" : "❌ FAILURES"} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

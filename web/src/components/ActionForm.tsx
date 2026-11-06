@@ -18,6 +18,7 @@ export function ActionForm({
   className,
   resetOnSuccess = false,
   collapseOnSuccess = false,
+  onSuccess,
   confirm,
 }: {
   action: Action;
@@ -25,6 +26,8 @@ export function ActionForm({
   className?: string;
   resetOnSuccess?: boolean;
   collapseOnSuccess?: boolean;
+  /** For state the form can't reset itself, like controlled inputs. */
+  onSuccess?: () => void;
   confirm?: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -34,6 +37,7 @@ export function ActionForm({
       const result = await action(formData);
       if (result.ok && resetOnSuccess) formRef.current?.reset();
       if (result.ok && collapseOnSuccess) formRef.current?.closest("details")?.removeAttribute("open");
+      if (result.ok) onSuccess?.();
       return result;
     },
     null,
